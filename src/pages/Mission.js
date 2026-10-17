@@ -9,8 +9,8 @@ export default function Mission({ setCurrentPage }) {
   const [expandedSteps, setExpandedSteps] = useState([]);
   const [shakingId, setShakingId] = useState(null);
 
-  // API Data States
-  const [missionData, setMissionData] = useState({ boxes: [], steps: [] });
+  // API Data States for Steps fetched from backend
+  const [stepsData, setStepsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -18,28 +18,37 @@ export default function Mission({ setCurrentPage }) {
   const audioRef = useRef(new Audio(clickSoundFile));
 
   // -------------------------------------------------------------
-  // API Call: Fetch Mission Data (Boxes and Steps) from Backend
+  // API Call: Fetch Steps one by one using developer's getStep format
   // -------------------------------------------------------------
   useEffect(() => {
-    const fetchMissionData = async () => {
+    const fetchAllSteps = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/mission/data');
-        if (!response.ok) {
-          throw new Error('Failed to fetch mission data');
+        const stepsArray = [];
+        for (let i = 1; i <= 5; i++) {
+          const response = await fetch(`http://localhost:3000/step/${encodeURIComponent(i)}`);
+          
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          
+          const result = await response.json();
+          stepsArray.push({
+            id: i,
+            title: `Step ${i}`,
+            description: result.message || "No description available"
+          });
         }
-        const result = await response.json();
-        if (result.success) {
-          setMissionData(result.data);
-        }
+
+        setStepsData(stepsArray);
       } catch (err) {
         console.error("API Fetch Error:", err);
-        setError("Failed to load mission data from backend server.");
+        setError("Failed to load mission steps from backend server.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMissionData();
+    fetchAllSteps();
   }, []);
 
   const playCustomSound = () => {
@@ -122,10 +131,10 @@ export default function Mission({ setCurrentPage }) {
               />
             </div>
             <h3 className="text-3xl font-black tracking-wider text-white mb-2">
-              {missionData.boxes[0]?.title || 'BOX A'}
+              BOX A
             </h3>
             <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
-              {missionData.boxes[0]?.description}
+              Contains the first set of network components and endpoint devices.
             </p>
           </div>
 
@@ -144,10 +153,10 @@ export default function Mission({ setCurrentPage }) {
               />
             </div>
             <h3 className="text-3xl font-black tracking-wider text-white mb-2">
-              {missionData.boxes[1]?.title || 'BOX B'}
+              BOX B
             </h3>
             <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
-              {missionData.boxes[1]?.description}
+              Contains essential cables and connection equipment.
             </p>
           </div>
 
@@ -157,10 +166,9 @@ export default function Mission({ setCurrentPage }) {
       {/* Step buttons section */}
       <div className="bg-white py-20 px-6 text-center">
         <div className="flex flex-col items-center space-y-6 max-w-3xl mx-auto mb-12">
-          {missionData.steps.map((step) => {
+          {stepsData.map((step) => {
             const isExpanded = expandedSteps.includes(step.id);
 
-            // Predefined gradient colors mapped dynamically for steps
             const colorClasses = [
               'bg-gradient-to-br from-[#164e20] to-[#257933] border-[#388e45] hover:shadow-[0_0_20px_rgba(37,121,51,0.6)]',
               'bg-gradient-to-br from-[#1b5e25] to-[#2e8b3f] border-[#43a047] hover:shadow-[0_0_20px_rgba(46,139,63,0.6)]',

@@ -82,7 +82,7 @@ function MatrixBackground() {
 export default function Game({ setCurrentPage }) {
   const [activeStep, setActiveStep] = useState(0);
   const [answers, setAnswers] = useState([]);
-  const [currentHintIndex, setCurrentHintIndex] = useState(null);
+  const [currentHintText, setCurrentHintText] = useState(null);
   const [showCongrats, setShowCongrats] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
@@ -98,22 +98,24 @@ export default function Game({ setCurrentPage }) {
   const [robotTop, setRobotTop] = useState(0);
 
   // -------------------------------------------------------------
-  // API Call 1: Fetch Questions and Hints from Backend (GET)
+  // API Call: Fetch Questions from Backend using Developer's Route (/question/:id)
   // -------------------------------------------------------------
   useEffect(() => {
-    const fetchQuestions = async () => {
+    const fetchAllQuestions = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/game/questions');
-        if (!response.ok) {
-          throw new Error('Failed to fetch game questions');
+        const fetchedQuestions = [];
+        // Loop through question IDs 1 to 4
+        for (let i = 1; i <= 4; i++) {
+          const response = await fetch(`http://localhost:3000/question/${encodeURIComponent(i)}`);
+          if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+          }
+          const result = await response.json();
+          fetchedQuestions.push(result.data || result);
         }
-        const result = await response.json();
-        
-        if (result.success) {
-          setQuestionsData(result.data);
-          // Initialize answers array based on the number of questions
-          setAnswers(new Array(result.data.length).fill(''));
-        }
+
+        setQuestionsData(fetchedQuestions);
+        setAnswers(new Array(fetchedQuestions.length).fill(''));
       } catch (err) {
         console.error("API Fetch Error:", err);
         setError("Failed to load questions from backend server.");
@@ -122,7 +124,7 @@ export default function Game({ setCurrentPage }) {
       }
     };
 
-    fetchQuestions();
+    fetchAllQuestions();
   }, []);
 
   // Calculate dynamic top offset for the robot companion
@@ -144,12 +146,12 @@ export default function Game({ setCurrentPage }) {
   };
 
   // -------------------------------------------------------------
-  // API Call 2: Submit Answers to Backend (POST)
+  // API Call: Submit Answers to Backend (/answer)
   // -------------------------------------------------------------
   const handleSubmit = async () => {
     if (isCompleted && answers.every(a => a.trim() !== '')) {
       try {
-        const response = await fetch('http://localhost:5000/api/game/submit', {
+        const response = await fetch('http://localhost:3000/answer', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -157,9 +159,12 @@ export default function Game({ setCurrentPage }) {
           body: JSON.stringify({ answers }),
         });
 
-        const result = await response.json();
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
 
-        if (result.success) {
+        const result = await response.json();
+        if (result.success || result.message) {
           setShowCongrats(true);
         } else {
           alert('Submission failed. Please try again.');
@@ -280,7 +285,7 @@ export default function Game({ setCurrentPage }) {
                     <div className="flex space-x-3">
                       <button
                         disabled={!isUnlocked}
-                        onClick={() => setCurrentHintIndex(index)}
+                        onClick={() => setCurrentHintText(item.hint)}
                         className="w-1/3 bg-[#ffb703] hover:bg-[#ffa200] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
                       >
                         Hint
@@ -318,10 +323,10 @@ export default function Game({ setCurrentPage }) {
       </div>
 
       {/* Dynamic hint modal component */}
-      {currentHintIndex !== null && questionsData[currentHintIndex] && (
+      {currentHintText !== null && (
         <HintModal 
-          hintText={questionsData[currentHintIndex].hint} 
-          onClose={() => setCurrentHintIndex(null)} 
+          hintText={currentHintText} 
+          onClose={() => setCurrentHintText(null)} 
         />
       )}
 
