@@ -4,9 +4,10 @@ import HintModal from '../components/HintModal';
 import CongratsModal from '../components/CongratsModal';
 import logoImg from '../assets/game-logo.png';
 
-const API_URL = 'http://localhost:3000';
+// API base URL
+const API_BASE_URL = 'http://localhost:3000';
 
-// Matrix digital rain background — original UI
+// Matrix digital rain background canvas component
 function MatrixBackground() {
   const canvasRef = useRef(null);
 
@@ -19,28 +20,41 @@ function MatrixBackground() {
 
     let animationFrameId;
     let lastTime = 0;
-
     const fps = 25;
     const interval = 1000 / fps;
-    const fontSize = 16;
-    const characters = '01';
-
-    let drops = [];
 
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+    };
 
-      const columns = Math.floor(canvas.width / fontSize);
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
 
+    const characters = '01';
+    const fontSize = 16;
+
+    let columns = Math.floor(canvas.width / fontSize);
+    let drops = Array.from(
+      { length: columns },
+      () => Math.floor(Math.random() * -100)
+    );
+
+    const updateColumns = () => {
+      columns = Math.floor(canvas.width / fontSize);
       drops = Array.from(
         { length: columns },
         () => Math.floor(Math.random() * -100)
       );
     };
 
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
+    const handleResize = () => {
+      resizeCanvas();
+      updateColumns();
+    };
+
+    window.removeEventListener('resize', resizeCanvas);
+    window.addEventListener('resize', handleResize);
 
     const draw = (currentTime) => {
       animationFrameId = requestAnimationFrame(draw);
@@ -56,7 +70,7 @@ function MatrixBackground() {
       ctx.font = `${fontSize}px "Fredoka", monospace`;
 
       for (let i = 0; i < drops.length; i++) {
-        const character = characters.charAt(
+        const text = characters.charAt(
           Math.floor(Math.random() * characters.length)
         );
 
@@ -66,7 +80,7 @@ function MatrixBackground() {
         const x = i * fontSize;
         const y = drops[i] * fontSize;
 
-        ctx.fillText(character, x, y);
+        ctx.fillText(text, x, y);
 
         if (y > canvas.height && Math.random() > 0.98) {
           drops[i] = 0;
@@ -79,7 +93,7 @@ function MatrixBackground() {
     animationFrameId = requestAnimationFrame(draw);
 
     return () => {
-      window.removeEventListener('resize', resizeCanvas);
+      window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
@@ -92,193 +106,249 @@ function MatrixBackground() {
   );
 }
 
-// Fallback questions if the API cannot provide a question
-const defaultQuestions = [
-  {
-    id: 1,
-    question: 'Find the most important cable in the second box',
-    hint: 'Look at the appearance of the devices.',
-  },
-  {
-    id: 2,
-    question: 'Find the Raspberry Pi, also known as the endpoint, in the first box',
-    hint: 'Think about your computer. The device looks similar.',
-  },
-  {
-    id: 3,
-    question: 'Find the bridge, also known as the switch',
-    hint: 'Think about a real bridge that many people use.',
-  },
-  {
-    id: 4,
-    question: 'Find the boat, also known as the router',
-    hint: 'It is the last device and transports data to another network.',
-  },
-  {
-    id: 5,
-    question: 'Complete the final challenge to save your world',
-    hint: 'Review the network devices and how they connect.',
-  },
-];
+// GET /step/:id
+async function getStep(id) {
+  const response = await fetch(
+    `${API_BASE_URL}/step/${encodeURIComponent(id)}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Step API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// GET /question/:id
+async function getQuestion(id) {
+  const response = await fetch(
+    `${API_BASE_URL}/question/${encodeURIComponent(id)}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Question ${id} API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+// GET /get/hint/:id
+async function getHint(id) {
+  const response = await fetch(
+    `${API_BASE_URL}/get/hint/${encodeURIComponent(id)}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`Hint ${id} API error: ${response.status}`);
+  }
+
+  return response.json();
+}
 
 // Support common backend response formats
-function normalizeQuestion(result, index) {
-  const data = result?.data ?? result;
+function extractQuestion(data, id, fallback) {
+  const result = data?.message ?? data?.question ?? data?.data ?? data;
 
-  const question =
-    typeof data === 'string'
-      ? data
-      : data?.question ?? data?.message;
+  if (typeof result === 'string') {
+    return {
+      id,
+      question: result,
+      hint: fallback?.hint ?? '',
+    };
+  }
 
   return {
-    ...defaultQuestions[index],
-    ...(typeof data === 'object' && data !== null ? data : {}),
-    id: data?.id ?? index + 1,
-    question: question || defaultQuestions[index].question,
-    hint: data?.hint ?? data?.data?.hint ?? defaultQuestions[index].hint,
+    id,
+    question:
+      result?.question ??
+      result?.text ??
+      result?.title ??
+      result?.message ??
+      fallback?.question ??
+      '',
+    hint: result?.hint ?? fallback?.hint ?? '',
   };
 }
 
-function normalizeHint(result) {
-  const data = result?.data ?? result;
+function extractHint(data, fallbackHint) {
+  const result = data?.message ?? data?.hint ?? data?.data ?? data;
 
-  if (typeof data === 'string') return data;
+  if (typeof result === 'string') return result;
 
   return (
-    data?.hint ??
-    data?.message ??
-    'No hint available.'
+    result?.hint ??
+    result?.text ??
+    result?.message ??
+    fallbackHint ??
+    'Hint is not available.'
   );
 }
 
 export default function Game({ setCurrentPage }) {
   const [activeStep, setActiveStep] = useState(0);
-  const [answers, setAnswers] = useState(['', '', '', '', '']);
+  const [answers, setAnswers] = useState([]);
   const [currentHintText, setCurrentHintText] = useState(null);
   const [showCongrats, setShowCongrats] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  // API Data States
   const [questionsData, setQuestionsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Store step API responses without changing the UI
+  const [stepsData, setStepsData] = useState({});
+
+  // Prevent multiple submissions
   const [submitting, setSubmitting] = useState(false);
 
+  // References to track question card positions for smooth robot movement
   const cardRefs = useRef([]);
+
+  // Dynamic top offset for robot companion
   const [robotTop, setRobotTop] = useState(0);
 
-  // Load all five questions.
-  // Each API request is explicit; no loop for API calls.
+  // Fallback questions data in case the backend server is offline
+  const defaultQuestions = [
+    {
+      id: 1,
+      question: 'Find the most important cable in the second box',
+      hint: 'Appearance of devices',
+    },
+    {
+      id: 2,
+      question: 'Find the raspberry pi aka endpoint in the first box',
+      hint: 'Think about it. It looks like your computer',
+    },
+    {
+      id: 3,
+      question: 'Find the bridge aka called switch',
+      hint: 'Imagine it is relevant to a real bridge, which is visited by many people',
+    },
+    {
+      id: 4,
+      question: 'Find the boat aka called router',
+      hint: 'It will be the last device, but it serves as the boat to transport the goods to another world',
+    },
+  ];
+
+  // -------------------------------------------------------------
+  // API Calls:
+  // GET /step/1, /step/2, etc.
+  // GET /question/1, /question/2, etc.
+  // -------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
-    async function fetchQuestions() {
+    const fetchAllQuestions = async () => {
       setLoading(true);
       setError(null);
 
       try {
-        let question1 = defaultQuestions[0];
-        let question2 = defaultQuestions[1];
-        let question3 = defaultQuestions[2];
-        let question4 = defaultQuestions[3];
-        let question5 = defaultQuestions[4];
+        // Fetch steps independently.
+        // A missing step endpoint must not block question loading.
+        const stepResults = await Promise.allSettled(
+          [1, 2, 3, 4, 5].map((id) => getStep(id))
+        );
 
-        try {
-          const response = await fetch(`${API_URL}/question/1`);
-          if (response.ok) {
-            question1 = normalizeQuestion(await response.json(), 0);
-          } else {
-            console.warn('Question 1 API error:', response.status);
-          }
-        } catch (err) {
-          console.warn('Question 1 unavailable:', err);
-        }
+        const loadedSteps = {};
 
-        try {
-          const response = await fetch(`${API_URL}/question/2`);
-          if (response.ok) {
-            question2 = normalizeQuestion(await response.json(), 1);
+        stepResults.forEach((result, index) => {
+          if (result.status === 'fulfilled') {
+            loadedSteps[index + 1] = result.value;
           } else {
-            console.warn('Question 2 API error:', response.status);
+            console.warn(
+              `Could not load step ${index + 1}:`,
+              result.reason
+            );
           }
-        } catch (err) {
-          console.warn('Question 2 unavailable:', err);
-        }
+        });
 
-        try {
-          const response = await fetch(`${API_URL}/question/3`);
-          if (response.ok) {
-            question3 = normalizeQuestion(await response.json(), 2);
-          } else {
-            console.warn('Question 3 API error:', response.status);
-          }
-        } catch (err) {
-          console.warn('Question 3 unavailable:', err);
-        }
+        // Load question IDs one by one.
+        // Try five IDs so a fifth backend question can be included.
+        const questionResults = await Promise.allSettled(
+          [1, 2, 3, 4, 5].map((id) => getQuestion(id))
+        );
 
-        try {
-          const response = await fetch(`${API_URL}/question/4`);
-          if (response.ok) {
-            question4 = normalizeQuestion(await response.json(), 3);
-          } else {
-            console.warn('Question 4 API error:', response.status);
-          }
-        } catch (err) {
-          console.warn('Question 4 unavailable:', err);
-        }
+        const fetchedQuestions = [];
 
-        try {
-          const response = await fetch(`${API_URL}/question/5`);
-          if (response.ok) {
-            question5 = normalizeQuestion(await response.json(), 4);
+        questionResults.forEach((result, index) => {
+          const id = index + 1;
+          const fallback = defaultQuestions.find(
+            (question) => question.id === id
+          );
+
+          if (result.status === 'fulfilled') {
+            const question = extractQuestion(
+              result.value,
+              id,
+              fallback
+            );
+
+            // Ignore empty question responses instead of adding
+            // blank cards to the game.
+            if (question.question) {
+              fetchedQuestions.push(question);
+            } else if (fallback) {
+              fetchedQuestions.push(fallback);
+            }
           } else {
-            console.warn('Question 5 API error:', response.status);
+            console.warn(
+              `Could not load question ${id}:`,
+              result.reason
+            );
+
+            if (fallback) {
+              fetchedQuestions.push(fallback);
+            }
           }
-        } catch (err) {
-          console.warn('Question 5 unavailable:', err);
-        }
+        });
 
         if (cancelled) return;
 
-        setQuestionsData([
-          question1,
-          question2,
-          question3,
-          question4,
-          question5,
-        ]);
+        // If the API returned no usable questions, use all defaults.
+        const finalQuestions =
+          fetchedQuestions.length > 0
+            ? fetchedQuestions
+            : defaultQuestions;
 
-        setAnswers(['', '', '', '', '']);
+        setStepsData(loadedSteps);
+        setQuestionsData(finalQuestions);
+        setAnswers(new Array(finalQuestions.length).fill(''));
       } catch (err) {
-        console.error('Question loading error:', err);
+        console.error('API Fetch Error:', err);
 
         if (!cancelled) {
-          setError('Could not load game data.');
+          setQuestionsData(defaultQuestions);
+          setAnswers(new Array(defaultQuestions.length).fill(''));
+          setError('Using fallback questions because the API is unavailable.');
         }
       } finally {
         if (!cancelled) {
           setLoading(false);
         }
       }
-    }
+    };
 
-    fetchQuestions();
+    fetchAllQuestions();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Keep BOT-X aligned with the active question card
+  // Calculate dynamic top offset for the robot companion
   useEffect(() => {
     const updateRobotPosition = () => {
-      const card = cardRefs.current[activeStep];
+      const cardElement = cardRefs.current[activeStep];
 
-      if (card) {
-        setRobotTop(card.offsetTop);
+      if (cardElement) {
+        setRobotTop(cardElement.offsetTop);
       }
     };
 
     updateRobotPosition();
+
     window.addEventListener('resize', updateRobotPosition);
 
     return () => {
@@ -286,77 +356,59 @@ export default function Game({ setCurrentPage }) {
     };
   }, [activeStep, questionsData]);
 
-  // Fetch the hint from the backend
-  async function handleHint(index, item) {
-    setError(null);
+  // -------------------------------------------------------------
+  // API Call: Load hint when Hint is clicked
+  // GET /get/hint/:id
+  // -------------------------------------------------------------
+  const handleShowHint = async (index) => {
+    const question = questionsData[index];
+
+    if (!question) return;
+
+    // Show fallback immediately while the API request is running
+    setCurrentHintText(question.hint || 'Loading hint...');
 
     try {
-      let hintResult;
-
-      if (index === 0) {
-        const response = await fetch(`${API_URL}/get/hint/1`);
-        if (!response.ok) throw new Error(`Hint 1 API error: ${response.status}`);
-        hintResult = await response.json();
-      } else if (index === 1) {
-        const response = await fetch(`${API_URL}/get/hint/2`);
-        if (!response.ok) throw new Error(`Hint 2 API error: ${response.status}`);
-        hintResult = await response.json();
-      } else if (index === 2) {
-        const response = await fetch(`${API_URL}/get/hint/3`);
-        if (!response.ok) throw new Error(`Hint 3 API error: ${response.status}`);
-        hintResult = await response.json();
-      } else if (index === 3) {
-        const response = await fetch(`${API_URL}/get/hint/4`);
-        if (!response.ok) throw new Error(`Hint 4 API error: ${response.status}`);
-        hintResult = await response.json();
-      } else if (index === 4) {
-        const response = await fetch(`${API_URL}/get/hint/5`);
-        if (!response.ok) throw new Error(`Hint 5 API error: ${response.status}`);
-        hintResult = await response.json();
-      }
-
+      const result = await getHint(question.id);
       setCurrentHintText(
-        hintResult ? normalizeHint(hintResult) : item.hint
+        extractHint(result, question.hint)
       );
     } catch (err) {
-      console.error('Hint API error:', err);
+      console.error('API Hint Error:', err);
 
-      // If the hint API is unavailable, use the fallback hint.
+      // Keep the fallback hint if the endpoint is unavailable
       setCurrentHintText(
-        item?.hint || 'Hint is currently unavailable.'
+        question.hint || 'Hint is not available right now.'
       );
     }
-  }
+  };
 
-  // Original Done button behaviour
-  function handleDone(index) {
-    if (!answers[index]?.trim()) {
-      setError('Please enter an answer before pressing Done.');
+  const handleDone = (index) => {
+    if (answers[index] && answers[index].trim() !== '') {
+      if (index === activeStep && activeStep < questionsData.length - 1) {
+        setActiveStep(activeStep + 1);
+      } else if (index === questionsData.length - 1) {
+        setIsCompleted(true);
+      }
+    }
+  };
+
+  // -------------------------------------------------------------
+  // API Call: Submit Answers to Backend (/answer)
+  // -------------------------------------------------------------
+  const handleSubmit = async () => {
+    if (
+      submitting ||
+      !isCompleted ||
+      !answers.every((answer) => answer.trim() !== '')
+    ) {
       return;
     }
 
-    setError(null);
-
-    if (index === activeStep && activeStep < questionsData.length - 1) {
-      setActiveStep((previous) => previous + 1);
-    } else if (index === questionsData.length - 1) {
-      setIsCompleted(true);
-    }
-  }
-
-  // Submit all answers using the original backend contract
-  async function handleSubmit() {
-    const allAnswersFilled =
-      answers.length === 5 &&
-      answers.every((answer) => answer.trim() !== '');
-
-    if (!isCompleted || !allAnswersFilled || submitting) return;
+    setSubmitting(true);
 
     try {
-      setSubmitting(true);
-      setError(null);
-
-      const response = await fetch(`${API_URL}/answer`, {
+      const response = await fetch(`${API_BASE_URL}/answer`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -364,36 +416,24 @@ export default function Game({ setCurrentPage }) {
         body: JSON.stringify({ answers }),
       });
 
-      let result = {};
-
-      try {
-        result = await response.json();
-      } catch {
-        // The server may return an empty response body.
-      }
-
       if (!response.ok) {
-        throw new Error(
-          result?.message || `Answer API error: ${response.status}`
-        );
+        throw new Error(`API error: ${response.status}`);
       }
 
-      if (result.success === true || result.message) {
+      const result = await response.json();
+
+      if (result.success || result.message) {
         setShowCongrats(true);
       } else {
-        setError('Submission failed. Please try again.');
+        alert('Submission failed. Please try again.');
       }
     } catch (err) {
-      console.error('Answer submission error:', err);
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Error connecting to backend server.'
-      );
+      console.error('API Submit Error:', err);
+      alert('Error connecting to backend server.');
     } finally {
       setSubmitting(false);
     }
-  }
+  };
 
   if (loading) {
     return (
@@ -403,26 +443,11 @@ export default function Game({ setCurrentPage }) {
     );
   }
 
-  if (error && questionsData.length === 0) {
-    return (
-      <div className="min-h-screen bg-[#040c0e] flex flex-col items-center justify-center gap-4 px-6 text-center text-red-400 font-bold text-lg">
-        <p>{error}</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="rounded-xl bg-[#ff5500] px-5 py-3 text-white text-sm"
-        >
-          Retry
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#040c0e] py-12 px-6 flex flex-col items-center justify-center relative overflow-hidden">
       <MatrixBackground />
 
-      {/* Original Cyber Quest Header Logo */}
+      {/* Cyber Quest Header Logo */}
       <div className="flex flex-col items-center justify-center mb-8 relative z-10">
         <div className="w-16 h-16 flex items-center justify-center mb-1">
           <img
@@ -436,10 +461,10 @@ export default function Game({ setCurrentPage }) {
         </span>
       </div>
 
-      {/* Original main layout */}
+      {/* Main layout container */}
       <div className="w-full max-w-5xl relative z-10 lg:pl-40">
 
-        {/* Original moving BOT-X companion */}
+        {/* Moving robot companion on the left side */}
         <div
           className="hidden lg:flex flex-col items-center p-4 bg-[#061215]/95 border-2 border-[#72c02c] rounded-3xl shadow-[0_0_25px_rgba(114,192,44,0.3)] backdrop-blur-md absolute left-0 w-32 transition-all duration-500 ease-in-out z-20"
           style={{ top: `${robotTop}px` }}
@@ -473,7 +498,7 @@ export default function Game({ setCurrentPage }) {
           </div>
         </div>
 
-        {/* Original mobile robot indicator */}
+        {/* Mobile responsive robot position indicator */}
         <div className="lg:hidden flex items-center justify-center mb-6 bg-[#061215]/95 border-2 border-[#72c02c] p-3 rounded-2xl shadow-[0_0_15px_rgba(114,192,44,0.3)]">
           <span className="text-white text-xs font-bold mr-2">
             🤖 BOT-X is at:
@@ -483,19 +508,16 @@ export default function Game({ setCurrentPage }) {
           </span>
         </div>
 
-        {/* Original question cards */}
+        {/* Questions card list */}
         <div className="space-y-4 w-full">
           {questionsData.map((item, index) => {
             const isUnlocked = index <= activeStep;
-            const isCurrentActive =
-              index === activeStep && !isCompleted;
+            const isCurrentActive = index === activeStep && !isCompleted;
 
             return (
               <div
                 key={item.id || index}
-                ref={(el) => {
-                  cardRefs.current[index] = el;
-                }}
+                ref={(el) => (cardRefs.current[index] = el)}
                 className={`bg-[#061215]/95 backdrop-blur-md border-2 transition-all duration-300 p-6 rounded-none ${
                   isCurrentActive
                     ? 'border-[#ff5500] shadow-[0_0_25px_rgba(255,85,0,0.3)] scale-[1.01]'
@@ -512,31 +534,28 @@ export default function Game({ setCurrentPage }) {
                   <div className="flex flex-col space-y-3">
                     <input
                       type="text"
-                      disabled={!isUnlocked || submitting}
+                      disabled={!isUnlocked}
                       value={answers[index] || ''}
                       onChange={(e) => {
-                        const newAnswers = [...answers];
-                        newAnswers[index] = e.target.value;
-                        setAnswers(newAnswers);
-                        setError(null);
+                        const newAns = [...answers];
+                        newAns[index] = e.target.value;
+                        setAnswers(newAns);
                       }}
                       placeholder="Enter answer..."
-                      className="w-full bg-white text-black px-4 py-2.5 rounded-xl font-medium outline-none text-sm shadow-inner placeholder:text-gray-400 disabled:opacity-60"
+                      className="w-full bg-white text-black px-4 py-2.5 rounded-xl font-medium outline-none text-sm shadow-inner placeholder:text-gray-400"
                     />
 
                     <div className="flex space-x-3">
                       <button
-                        type="button"
-                        disabled={!isUnlocked || submitting}
-                        onClick={() => handleHint(index, item)}
+                        disabled={!isUnlocked}
+                        onClick={() => handleShowHint(index)}
                         className="w-1/3 bg-[#ffb703] hover:bg-[#ffa200] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
                       >
                         Hint
                       </button>
 
                       <button
-                        type="button"
-                        disabled={!isUnlocked || submitting}
+                        disabled={!isUnlocked}
                         onClick={() => handleDone(index)}
                         className="w-2/3 bg-[#ff5500] hover:bg-[#e04b00] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
                       >
@@ -551,35 +570,26 @@ export default function Game({ setCurrentPage }) {
         </div>
       </div>
 
-      {/* Original Submit button */}
+      {/* Main submit button */}
       <div className="mt-8 relative z-10">
         <button
-          type="button"
           onClick={handleSubmit}
           disabled={
+            submitting ||
             !isCompleted ||
-            !answers.every((answer) => answer.trim() !== '') ||
-            submitting
+            !answers.every((answer) => answer.trim() !== '')
           }
           className={`w-64 py-3.5 rounded-2xl font-black text-base shadow-xl transition ${
-            isCompleted &&
-            answers.every((answer) => answer.trim() !== '') &&
-            !submitting
+            isCompleted && answers.every((answer) => answer.trim() !== '')
               ? 'bg-[#ff5500] hover:bg-[#e04b00] text-white cursor-pointer shadow-[0_0_20px_rgba(255,85,0,0.5)]'
               : 'bg-[#3a3a3a] text-gray-400 cursor-not-allowed'
           }`}
         >
           {submitting ? 'Submitting...' : 'Submit'}
         </button>
-
-        {error && (
-          <p role="alert" className="mt-3 max-w-md text-center text-sm text-red-400">
-            {error}
-          </p>
-        )}
       </div>
 
-      {/* Original HintModal */}
+      {/* Dynamic hint modal component */}
       {currentHintText !== null && (
         <HintModal
           hintText={currentHintText}
@@ -587,7 +597,7 @@ export default function Game({ setCurrentPage }) {
         />
       )}
 
-      {/* Original CongratsModal */}
+      {/* Congratulations modal component */}
       {showCongrats && (
         <CongratsModal
           onClose={() => setShowCongrats(false)}

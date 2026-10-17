@@ -1,9 +1,12 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import boxAImg from '../assets/boxA.png';
 import boxBImg from '../assets/boxB.png';
 
 // Import custom click sound effect file
 import clickSoundFile from '../assets/click-box.mp3';
+
+const API_BASE_URL = 'http://localhost:3000';
 
 export default function Mission({ setCurrentPage }) {
   const [expandedSteps, setExpandedSteps] = useState([]);
@@ -15,68 +18,144 @@ export default function Mission({ setCurrentPage }) {
   const [error, setError] = useState(null);
 
   // Initialize audio reference for box click effects
-  const audioRef = useRef(new Audio(clickSoundFile));
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio(clickSoundFile);
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   // Default fallback steps (If backend is offline or empty)
   const defaultSteps = [
-    { id: 1, title: 'Step 1', description: 'Your world will have been taken from the enemy.' },
-    { id: 2, title: 'Step 2', description: 'Mission is to create a way to save your world.' },
-    { id: 3, title: 'Step 3', description: "You're gonna have 5 different questions and hint to solve it." },
-    { id: 4, title: 'Step 4', description: 'You also have two boxes with different components inside.' },
-    { id: 5, title: 'Step 5', description: 'If you can solve successfully all, and find the way to cope with final on, you win the game and get a prize.' }
+    {
+      id: 1,
+      title: 'Step 1',
+      description: 'Your world will have been taken from the enemy.'
+    },
+    {
+      id: 2,
+      title: 'Step 2',
+      description: 'Mission is to create a way to save your world.'
+    },
+    {
+      id: 3,
+      title: 'Step 3',
+      description: "You're gonna have 5 different questions and hint to solve it."
+    },
+    {
+      id: 4,
+      title: 'Step 4',
+      description: 'You also have two boxes with different components inside.'
+    },
+    {
+      id: 5,
+      title: 'Step 5',
+      description: 'If you can solve successfully all, and find the way to cope with final on, you win the game and get a prize.'
+    }
   ];
 
   // -------------------------------------------------------------
-  // API Call: Fetch Steps safely without breaking the UI
+  // API Call: GET /step/:id
+  // Backend response: { message: data.step }
   // -------------------------------------------------------------
   useEffect(() => {
+    let cancelled = false;
+
     const fetchAllSteps = async () => {
+      setLoading(true);
+      setError(null);
+
       try {
-        const stepsArray = [];
-        let fetchedAny = false;
+        // Fetch each step separately: /step/1, /step/2, etc.
+        const results = await Promise.all(
+          defaultSteps.map(async (defaultStep) => {
+            try {
+              const response = await fetch(
+                `${API_BASE_URL}/step/${defaultStep.id}`
+              );
 
-        for (let i = 1; i <= 5; i++) {
-          try {
-            const response = await fetch(`http://localhost:3000/step/${encodeURIComponent(i)}`);
-            if (response.ok) {
+              if (!response.ok) {
+                throw new Error(
+                  `Step ${defaultStep.id}: HTTP ${response.status}`
+                );
+              }
+
               const result = await response.json();
-              stepsArray.push({
-                id: i,
-                title: `Step ${i}`,
-                description: result.message || defaultSteps[i - 1].description
-              });
-              fetchedAny = true;
-            } else {
-              stepsArray.push(defaultSteps[i - 1]);
-            }
-          } catch (e) {
-            // If individual step fetch fails, use fallback step data
-            stepsArray.push(defaultSteps[i - 1]);
-          }
-        }
 
-        setStepsData(stepsArray);
+              // The backend returns { message: data.step }.
+              const description =
+                typeof result.message === 'string'
+                  ? result.message
+                  : defaultStep.description;
+
+              // Keep fallback text if the backend says no step exists.
+              if (
+                !description ||
+                description === 'There are no more steps'
+              ) {
+                return defaultStep;
+              }
+
+              return {
+                id: defaultStep.id,
+                title: `Step ${defaultStep.id}`,
+                description
+              };
+            } catch (err) {
+              console.error(
+                `Failed to fetch step ${defaultStep.id}:`,
+                err
+              );
+
+              // Use the matching fallback step if this request fails.
+              return defaultStep;
+            }
+          })
+        );
+
+        if (!cancelled) {
+          setStepsData(results);
+        }
       } catch (err) {
-        console.error("API Fetch Error:", err);
-        // Fallback to default steps if server connection completely fails
-        setStepsData(defaultSteps);
+        console.error('API Fetch Error:', err);
+
+        if (!cancelled) {
+          setStepsData(defaultSteps);
+          setError('Could not connect to the backend. Showing default steps.');
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     fetchAllSteps();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const playCustomSound = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
-      audioRef.current.play().catch((err) => console.log('Audio error:', err));
+
+      audioRef.current
+        .play()
+        .catch((err) => console.log('Audio error:', err));
     }
   };
 
   const triggerShake = (id) => {
     setShakingId(id);
+
     setTimeout(() => {
       setShakingId(null);
     }, 400); // 400ms shake duration
@@ -122,18 +201,18 @@ export default function Mission({ setCurrentPage }) {
 
       <div className="bg-[#071317] py-20 px-6 border-b border-gray-800">
         <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-16 text-center">
-          
+
           {/* Box A Column */}
           <div className="flex flex-col items-center">
-            <div 
+            <div
               onClick={() => handleBoxImageClick('boxA')}
               className={`w-full max-w-md h-72 flex items-center justify-center mb-6 overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 ${
                 shakingId === 'boxA' ? 'animate-shake' : ''
               }`}
             >
-              <img 
-                src={boxAImg} 
-                alt="Box A" 
+              <img
+                src={boxAImg}
+                alt="Box A"
                 className="w-full h-full object-contain filter drop-shadow-[0_15px_25px_rgba(0,0,0,0.6)] hover:brightness-110"
               />
             </div>
@@ -147,15 +226,15 @@ export default function Mission({ setCurrentPage }) {
 
           {/* Box B Column */}
           <div className="flex flex-col items-center">
-            <div 
+            <div
               onClick={() => handleBoxImageClick('boxB')}
               className={`w-full max-w-md h-72 flex items-center justify-center mb-6 overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 ${
                 shakingId === 'boxB' ? 'animate-shake' : ''
               }`}
             >
-              <img 
-                src={boxBImg} 
-                alt="Box B" 
+              <img
+                src={boxBImg}
+                alt="Box B"
                 className="w-full h-full object-contain filter drop-shadow-[0_15px_25px_rgba(0,0,0,0.6)] hover:brightness-110"
               />
             </div>
@@ -184,7 +263,8 @@ export default function Mission({ setCurrentPage }) {
               'bg-gradient-to-br from-[#124219] to-[#1e5c27] border-[#2e7d32] hover:shadow-[0_0_20px_rgba(30,125,39,0.6)]'
             ];
 
-            const assignedColor = colorClasses[(step.id - 1) % colorClasses.length];
+            const assignedColor =
+              colorClasses[(step.id - 1) % colorClasses.length];
 
             return (
               <button
