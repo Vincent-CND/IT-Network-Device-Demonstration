@@ -2,7 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
-import instruction from "./routes/step"
+import instruction from "./routes/instruction"
 dotenv.config()
 
 const app = express();

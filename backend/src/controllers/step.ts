@@ -1,10 +1,8 @@
-import express, {Request,Response} from "express";
+import { Request,Response } from "express";
 import prisma from "../prisma/prisma";
 
-const router = express.Router()
 
-
-router.get("/step/:id", async (req: Request,res: Response) => {
+export const fetchStep = async (req:Request, res: Response): Promise<void> => {
     const {id} = req.params
     
     try {
@@ -15,12 +13,10 @@ router.get("/step/:id", async (req: Request,res: Response) => {
         if(data) {
             res.json({message: data.step})
         } else {
-            console.log("No data")
+            res.json({message: "There are no more steps"})
         }
     } catch (error) {
         console.log(error)
         res.status(500).json({message: "Error from server"})
     }
-})
-
-export default router
+}
