@@ -4,36 +4,43 @@ import HintModal from '../components/HintModal';
 import CongratsModal from '../components/CongratsModal';
 import logoImg from '../assets/game-logo.png';
 
-// Matrix digital rain background canvas component
+const API_URL = 'http://localhost:3000';
+
+// Matrix digital rain background — original UI
 function MatrixBackground() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
     let animationFrameId;
     let lastTime = 0;
+
     const fps = 25;
     const interval = 1000 / fps;
+    const fontSize = 16;
+    const characters = '01';
+
+    let drops = [];
 
     const resizeCanvas = () => {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
+
+      const columns = Math.floor(canvas.width / fontSize);
+
+      drops = Array.from(
+        { length: columns },
+        () => Math.floor(Math.random() * -100)
+      );
     };
 
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
-
-    const characters = '01';
-    const fontSize = 16;
-    const columns = Math.floor(canvas.width / fontSize);
-
-    const drops = Array.from(
-      { length: columns },
-      () => Math.floor(Math.random() * -100)
-    );
 
     const draw = (currentTime) => {
       animationFrameId = requestAnimationFrame(draw);
@@ -49,7 +56,7 @@ function MatrixBackground() {
       ctx.font = `${fontSize}px "Fredoka", monospace`;
 
       for (let i = 0; i < drops.length; i++) {
-        const text = characters.charAt(
+        const character = characters.charAt(
           Math.floor(Math.random() * characters.length)
         );
 
@@ -59,7 +66,7 @@ function MatrixBackground() {
         const x = i * fontSize;
         const y = drops[i] * fontSize;
 
-        ctx.fillText(text, x, y);
+        ctx.fillText(character, x, y);
 
         if (y > canvas.height && Math.random() > 0.98) {
           drops[i] = 0;
@@ -85,252 +92,308 @@ function MatrixBackground() {
   );
 }
 
+// Fallback questions if the API cannot provide a question
+const defaultQuestions = [
+  {
+    id: 1,
+    question: 'Find the most important cable in the second box',
+    hint: 'Look at the appearance of the devices.',
+  },
+  {
+    id: 2,
+    question: 'Find the Raspberry Pi, also known as the endpoint, in the first box',
+    hint: 'Think about your computer. The device looks similar.',
+  },
+  {
+    id: 3,
+    question: 'Find the bridge, also known as the switch',
+    hint: 'Think about a real bridge that many people use.',
+  },
+  {
+    id: 4,
+    question: 'Find the boat, also known as the router',
+    hint: 'It is the last device and transports data to another network.',
+  },
+  {
+    id: 5,
+    question: 'Complete the final challenge to save your world',
+    hint: 'Review the network devices and how they connect.',
+  },
+];
+
+// Support common backend response formats
+function normalizeQuestion(result, index) {
+  const data = result?.data ?? result;
+
+  const question =
+    typeof data === 'string'
+      ? data
+      : data?.question ?? data?.message;
+
+  return {
+    ...defaultQuestions[index],
+    ...(typeof data === 'object' && data !== null ? data : {}),
+    id: data?.id ?? index + 1,
+    question: question || defaultQuestions[index].question,
+    hint: data?.hint ?? data?.data?.hint ?? defaultQuestions[index].hint,
+  };
+}
+
+function normalizeHint(result) {
+  const data = result?.data ?? result;
+
+  if (typeof data === 'string') return data;
+
+  return (
+    data?.hint ??
+    data?.message ??
+    'No hint available.'
+  );
+}
+
 export default function Game({ setCurrentPage }) {
   const [activeStep, setActiveStep] = useState(0);
-  const [answers, setAnswers] = useState([]);
+  const [answers, setAnswers] = useState(['', '', '', '', '']);
   const [currentHintText, setCurrentHintText] = useState(null);
   const [showCongrats, setShowCongrats] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  // API Data States
-  const [stepsData, setStepsData] = useState([]);
   const [questionsData, setQuestionsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  // References to track question card positions
   const cardRefs = useRef([]);
-
-  // Dynamic top offset for robot companion
   const [robotTop, setRobotTop] = useState(0);
 
-  // -------------------------------------------------------------
-  // API Calls: Fetch Steps and Questions
-  // No loop used for API requests
-  // -------------------------------------------------------------
+  // Load all five questions.
+  // Each API request is explicit; no loop for API calls.
   useEffect(() => {
     let cancelled = false;
 
-    const fetchGameData = async () => {
+    async function fetchQuestions() {
+      setLoading(true);
+      setError(null);
+
       try {
-        setLoading(true);
-        setError(null);
+        let question1 = defaultQuestions[0];
+        let question2 = defaultQuestions[1];
+        let question3 = defaultQuestions[2];
+        let question4 = defaultQuestions[3];
+        let question5 = defaultQuestions[4];
 
-        // GET /step/1
-        const stepResponse1 = await fetch('http://localhost:3000/step/1');
-        if (!stepResponse1.ok) {
-          throw new Error(`Step 1 API error: ${stepResponse1.status}`);
+        try {
+          const response = await fetch(`${API_URL}/question/1`);
+          if (response.ok) {
+            question1 = normalizeQuestion(await response.json(), 0);
+          } else {
+            console.warn('Question 1 API error:', response.status);
+          }
+        } catch (err) {
+          console.warn('Question 1 unavailable:', err);
         }
-        const stepResult1 = await stepResponse1.json();
 
-        // GET /step/2
-        const stepResponse2 = await fetch('http://localhost:3000/step/2');
-        if (!stepResponse2.ok) {
-          throw new Error(`Step 2 API error: ${stepResponse2.status}`);
+        try {
+          const response = await fetch(`${API_URL}/question/2`);
+          if (response.ok) {
+            question2 = normalizeQuestion(await response.json(), 1);
+          } else {
+            console.warn('Question 2 API error:', response.status);
+          }
+        } catch (err) {
+          console.warn('Question 2 unavailable:', err);
         }
-        const stepResult2 = await stepResponse2.json();
 
-        // GET /step/3
-        const stepResponse3 = await fetch('http://localhost:3000/step/3');
-        if (!stepResponse3.ok) {
-          throw new Error(`Step 3 API error: ${stepResponse3.status}`);
+        try {
+          const response = await fetch(`${API_URL}/question/3`);
+          if (response.ok) {
+            question3 = normalizeQuestion(await response.json(), 2);
+          } else {
+            console.warn('Question 3 API error:', response.status);
+          }
+        } catch (err) {
+          console.warn('Question 3 unavailable:', err);
         }
-        const stepResult3 = await stepResponse3.json();
 
-        // GET /step/4
-        const stepResponse4 = await fetch('http://localhost:3000/step/4');
-        if (!stepResponse4.ok) {
-          throw new Error(`Step 4 API error: ${stepResponse4.status}`);
+        try {
+          const response = await fetch(`${API_URL}/question/4`);
+          if (response.ok) {
+            question4 = normalizeQuestion(await response.json(), 3);
+          } else {
+            console.warn('Question 4 API error:', response.status);
+          }
+        } catch (err) {
+          console.warn('Question 4 unavailable:', err);
         }
-        const stepResult4 = await stepResponse4.json();
 
-        // GET /step/5
-        const stepResponse5 = await fetch('http://localhost:3000/step/5');
-        if (!stepResponse5.ok) {
-          throw new Error(`Step 5 API error: ${stepResponse5.status}`);
+        try {
+          const response = await fetch(`${API_URL}/question/5`);
+          if (response.ok) {
+            question5 = normalizeQuestion(await response.json(), 4);
+          } else {
+            console.warn('Question 5 API error:', response.status);
+          }
+        } catch (err) {
+          console.warn('Question 5 unavailable:', err);
         }
-        const stepResult5 = await stepResponse5.json();
-
-        // GET /question/1
-        const questionResponse1 = await fetch(
-          'http://localhost:3000/question/1'
-        );
-        if (!questionResponse1.ok) {
-          throw new Error(`Question 1 API error: ${questionResponse1.status}`);
-        }
-        const questionResult1 = await questionResponse1.json();
-
-        // GET /question/2
-        const questionResponse2 = await fetch(
-          'http://localhost:3000/question/2'
-        );
-        if (!questionResponse2.ok) {
-          throw new Error(`Question 2 API error: ${questionResponse2.status}`);
-        }
-        const questionResult2 = await questionResponse2.json();
-
-        // GET /question/3
-        const questionResponse3 = await fetch(
-          'http://localhost:3000/question/3'
-        );
-        if (!questionResponse3.ok) {
-          throw new Error(`Question 3 API error: ${questionResponse3.status}`);
-        }
-        const questionResult3 = await questionResponse3.json();
-
-        // GET /question/4
-        const questionResponse4 = await fetch(
-          'http://localhost:3000/question/4'
-        );
-        if (!questionResponse4.ok) {
-          throw new Error(`Question 4 API error: ${questionResponse4.status}`);
-        }
-        const questionResult4 = await questionResponse4.json();
 
         if (cancelled) return;
 
-        setStepsData([
-          stepResult1.message,
-          stepResult2.message,
-          stepResult3.message,
-          stepResult4.message,
-          stepResult5.message,
-        ]);
-
-        const question1 = questionResult1.data || questionResult1;
-        const question2 = questionResult2.data || questionResult2;
-        const question3 = questionResult3.data || questionResult3;
-        const question4 = questionResult4.data || questionResult4;
-
-        const fetchedQuestions = [
+        setQuestionsData([
           question1,
           question2,
           question3,
           question4,
-        ];
+          question5,
+        ]);
 
-        setQuestionsData(fetchedQuestions);
-        setAnswers(['', '', '', '']);
+        setAnswers(['', '', '', '', '']);
       } catch (err) {
-        console.error('API Fetch Error:', err);
+        console.error('Question loading error:', err);
 
         if (!cancelled) {
-          setError('Failed to load questions from backend server.');
+          setError('Could not load game data.');
         }
       } finally {
         if (!cancelled) {
           setLoading(false);
         }
       }
-    };
+    }
 
-    fetchGameData();
+    fetchQuestions();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Calculate dynamic top offset for robot companion
+  // Keep BOT-X aligned with the active question card
   useEffect(() => {
-    if (cardRefs.current[activeStep]) {
-      const cardElement = cardRefs.current[activeStep];
-      setRobotTop(cardElement.offsetTop);
-    }
+    const updateRobotPosition = () => {
+      const card = cardRefs.current[activeStep];
+
+      if (card) {
+        setRobotTop(card.offsetTop);
+      }
+    };
+
+    updateRobotPosition();
+    window.addEventListener('resize', updateRobotPosition);
+
+    return () => {
+      window.removeEventListener('resize', updateRobotPosition);
+    };
   }, [activeStep, questionsData]);
 
-  // -------------------------------------------------------------
-  // API Calls: Fetch Hints
-  // -------------------------------------------------------------
-  const handleHint = async (index, item) => {
+  // Fetch the hint from the backend
+  async function handleHint(index, item) {
+    setError(null);
+
     try {
       let hintResult;
 
       if (index === 0) {
-        // GET /get/hint/1
-        const response = await fetch('http://localhost:3000/get/hint/1');
-        if (!response.ok) throw new Error(`Hint API error: ${response.status}`);
+        const response = await fetch(`${API_URL}/get/hint/1`);
+        if (!response.ok) throw new Error(`Hint 1 API error: ${response.status}`);
         hintResult = await response.json();
       } else if (index === 1) {
-        // GET /get/hint/2
-        const response = await fetch('http://localhost:3000/get/hint/2');
-        if (!response.ok) throw new Error(`Hint API error: ${response.status}`);
+        const response = await fetch(`${API_URL}/get/hint/2`);
+        if (!response.ok) throw new Error(`Hint 2 API error: ${response.status}`);
         hintResult = await response.json();
       } else if (index === 2) {
-        // GET /get/hint/3
-        const response = await fetch('http://localhost:3000/get/hint/3');
-        if (!response.ok) throw new Error(`Hint API error: ${response.status}`);
+        const response = await fetch(`${API_URL}/get/hint/3`);
+        if (!response.ok) throw new Error(`Hint 3 API error: ${response.status}`);
         hintResult = await response.json();
       } else if (index === 3) {
-        // GET /get/hint/4
-        const response = await fetch('http://localhost:3000/get/hint/4');
-        if (!response.ok) throw new Error(`Hint API error: ${response.status}`);
+        const response = await fetch(`${API_URL}/get/hint/4`);
+        if (!response.ok) throw new Error(`Hint 4 API error: ${response.status}`);
+        hintResult = await response.json();
+      } else if (index === 4) {
+        const response = await fetch(`${API_URL}/get/hint/5`);
+        if (!response.ok) throw new Error(`Hint 5 API error: ${response.status}`);
         hintResult = await response.json();
       }
 
-      const hintText =
-        hintResult?.data?.hint ??
-        hintResult?.data?.message ??
-        hintResult?.hint ??
-        hintResult?.message ??
-        item.hint ??
-        'No hint available.';
-
-      setCurrentHintText(hintText);
+      setCurrentHintText(
+        hintResult ? normalizeHint(hintResult) : item.hint
+      );
     } catch (err) {
-      console.error('API Hint Error:', err);
+      console.error('Hint API error:', err);
 
-      // Use the hint already included in the question response, if available.
-      if (item.hint) {
-        setCurrentHintText(item.hint);
-      } else {
-        setError('Failed to load hint from backend server.');
-      }
+      // If the hint API is unavailable, use the fallback hint.
+      setCurrentHintText(
+        item?.hint || 'Hint is currently unavailable.'
+      );
     }
-  };
+  }
 
-  const handleDone = (index) => {
-    if (answers[index] && answers[index].trim() !== '') {
-      if (index === activeStep && activeStep < questionsData.length - 1) {
-        setActiveStep(activeStep + 1);
-      } else if (index === questionsData.length - 1) {
-        setIsCompleted(true);
-      }
+  // Original Done button behaviour
+  function handleDone(index) {
+    if (!answers[index]?.trim()) {
+      setError('Please enter an answer before pressing Done.');
+      return;
     }
-  };
 
-  // -------------------------------------------------------------
-  // API Call: Submit Answers to Backend
-  // POST /answer
-  // -------------------------------------------------------------
-  const handleSubmit = async () => {
-    if (isCompleted && answers.every((answer) => answer.trim() !== '')) {
+    setError(null);
+
+    if (index === activeStep && activeStep < questionsData.length - 1) {
+      setActiveStep((previous) => previous + 1);
+    } else if (index === questionsData.length - 1) {
+      setIsCompleted(true);
+    }
+  }
+
+  // Submit all answers using the original backend contract
+  async function handleSubmit() {
+    const allAnswersFilled =
+      answers.length === 5 &&
+      answers.every((answer) => answer.trim() !== '');
+
+    if (!isCompleted || !allAnswersFilled || submitting) return;
+
+    try {
+      setSubmitting(true);
+      setError(null);
+
+      const response = await fetch(`${API_URL}/answer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ answers }),
+      });
+
+      let result = {};
+
       try {
-        const response = await fetch('http://localhost:3000/answer', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ answers }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`API error: ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (result.success || result.message) {
-          setShowCongrats(true);
-        } else {
-          alert('Submission failed. Please try again.');
-        }
-      } catch (err) {
-        console.error('API Submit Error:', err);
-        alert('Error connecting to backend server.');
+        result = await response.json();
+      } catch {
+        // The server may return an empty response body.
       }
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message || `Answer API error: ${response.status}`
+        );
+      }
+
+      if (result.success === true || result.message) {
+        setShowCongrats(true);
+      } else {
+        setError('Submission failed. Please try again.');
+      }
+    } catch (err) {
+      console.error('Answer submission error:', err);
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Error connecting to backend server.'
+      );
+    } finally {
+      setSubmitting(false);
     }
-  };
+  }
 
   if (loading) {
     return (
@@ -340,10 +403,17 @@ export default function Game({ setCurrentPage }) {
     );
   }
 
-  if (error) {
+  if (error && questionsData.length === 0) {
     return (
-      <div className="min-h-screen bg-[#040c0e] flex items-center justify-center text-red-500 font-bold text-lg">
-        {error}
+      <div className="min-h-screen bg-[#040c0e] flex flex-col items-center justify-center gap-4 px-6 text-center text-red-400 font-bold text-lg">
+        <p>{error}</p>
+        <button
+          type="button"
+          onClick={() => window.location.reload()}
+          className="rounded-xl bg-[#ff5500] px-5 py-3 text-white text-sm"
+        >
+          Retry
+        </button>
       </div>
     );
   }
@@ -352,7 +422,7 @@ export default function Game({ setCurrentPage }) {
     <div className="min-h-screen bg-[#040c0e] py-12 px-6 flex flex-col items-center justify-center relative overflow-hidden">
       <MatrixBackground />
 
-      {/* Cyber Quest Header Logo */}
+      {/* Original Cyber Quest Header Logo */}
       <div className="flex flex-col items-center justify-center mb-8 relative z-10">
         <div className="w-16 h-16 flex items-center justify-center mb-1">
           <img
@@ -366,10 +436,10 @@ export default function Game({ setCurrentPage }) {
         </span>
       </div>
 
-      {/* Main layout container */}
+      {/* Original main layout */}
       <div className="w-full max-w-5xl relative z-10 lg:pl-40">
 
-        {/* Moving robot companion on the left side */}
+        {/* Original moving BOT-X companion */}
         <div
           className="hidden lg:flex flex-col items-center p-4 bg-[#061215]/95 border-2 border-[#72c02c] rounded-3xl shadow-[0_0_25px_rgba(114,192,44,0.3)] backdrop-blur-md absolute left-0 w-32 transition-all duration-500 ease-in-out z-20"
           style={{ top: `${robotTop}px` }}
@@ -403,7 +473,7 @@ export default function Game({ setCurrentPage }) {
           </div>
         </div>
 
-        {/* Mobile responsive robot position indicator */}
+        {/* Original mobile robot indicator */}
         <div className="lg:hidden flex items-center justify-center mb-6 bg-[#061215]/95 border-2 border-[#72c02c] p-3 rounded-2xl shadow-[0_0_15px_rgba(114,192,44,0.3)]">
           <span className="text-white text-xs font-bold mr-2">
             🤖 BOT-X is at:
@@ -413,16 +483,19 @@ export default function Game({ setCurrentPage }) {
           </span>
         </div>
 
-        {/* Questions card list */}
+        {/* Original question cards */}
         <div className="space-y-4 w-full">
           {questionsData.map((item, index) => {
             const isUnlocked = index <= activeStep;
-            const isCurrentActive = index === activeStep && !isCompleted;
+            const isCurrentActive =
+              index === activeStep && !isCompleted;
 
             return (
               <div
                 key={item.id || index}
-                ref={(el) => (cardRefs.current[index] = el)}
+                ref={(el) => {
+                  cardRefs.current[index] = el;
+                }}
                 className={`bg-[#061215]/95 backdrop-blur-md border-2 transition-all duration-300 p-6 rounded-none ${
                   isCurrentActive
                     ? 'border-[#ff5500] shadow-[0_0_25px_rgba(255,85,0,0.3)] scale-[1.01]'
@@ -439,20 +512,22 @@ export default function Game({ setCurrentPage }) {
                   <div className="flex flex-col space-y-3">
                     <input
                       type="text"
-                      disabled={!isUnlocked}
+                      disabled={!isUnlocked || submitting}
                       value={answers[index] || ''}
                       onChange={(e) => {
-                        const newAns = [...answers];
-                        newAns[index] = e.target.value;
-                        setAnswers(newAns);
+                        const newAnswers = [...answers];
+                        newAnswers[index] = e.target.value;
+                        setAnswers(newAnswers);
+                        setError(null);
                       }}
                       placeholder="Enter answer..."
-                      className="w-full bg-white text-black px-4 py-2.5 rounded-xl font-medium outline-none text-sm shadow-inner placeholder:text-gray-400"
+                      className="w-full bg-white text-black px-4 py-2.5 rounded-xl font-medium outline-none text-sm shadow-inner placeholder:text-gray-400 disabled:opacity-60"
                     />
 
                     <div className="flex space-x-3">
                       <button
-                        disabled={!isUnlocked}
+                        type="button"
+                        disabled={!isUnlocked || submitting}
                         onClick={() => handleHint(index, item)}
                         className="w-1/3 bg-[#ffb703] hover:bg-[#ffa200] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
                       >
@@ -460,7 +535,8 @@ export default function Game({ setCurrentPage }) {
                       </button>
 
                       <button
-                        disabled={!isUnlocked}
+                        type="button"
+                        disabled={!isUnlocked || submitting}
                         onClick={() => handleDone(index)}
                         className="w-2/3 bg-[#ff5500] hover:bg-[#e04b00] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
                       >
@@ -475,24 +551,35 @@ export default function Game({ setCurrentPage }) {
         </div>
       </div>
 
-      {/* Main submit button */}
+      {/* Original Submit button */}
       <div className="mt-8 relative z-10">
         <button
+          type="button"
           onClick={handleSubmit}
           disabled={
-            !isCompleted || !answers.every((answer) => answer.trim() !== '')
+            !isCompleted ||
+            !answers.every((answer) => answer.trim() !== '') ||
+            submitting
           }
           className={`w-64 py-3.5 rounded-2xl font-black text-base shadow-xl transition ${
-            isCompleted && answers.every((answer) => answer.trim() !== '')
+            isCompleted &&
+            answers.every((answer) => answer.trim() !== '') &&
+            !submitting
               ? 'bg-[#ff5500] hover:bg-[#e04b00] text-white cursor-pointer shadow-[0_0_20px_rgba(255,85,0,0.5)]'
               : 'bg-[#3a3a3a] text-gray-400 cursor-not-allowed'
           }`}
         >
-          Submit
+          {submitting ? 'Submitting...' : 'Submit'}
         </button>
+
+        {error && (
+          <p role="alert" className="mt-3 max-w-md text-center text-sm text-red-400">
+            {error}
+          </p>
+        )}
       </div>
 
-      {/* Dynamic hint modal component */}
+      {/* Original HintModal */}
       {currentHintText !== null && (
         <HintModal
           hintText={currentHintText}
@@ -500,7 +587,7 @@ export default function Game({ setCurrentPage }) {
         />
       )}
 
-      {/* Congratulations modal component */}
+      {/* Original CongratsModal */}
       {showCongrats && (
         <CongratsModal
           onClose={() => setShowCongrats(false)}
