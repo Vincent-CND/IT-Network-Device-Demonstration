@@ -3,6 +3,7 @@ import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
 import instruction from "./routes/instruction"
+import question from "./routes/Question"
 dotenv.config()
 
 const app = express();
@@ -23,7 +24,7 @@ app.use((req,res,next) => {
 //routes
 
 app.use('/',instruction)
-// app.use(/,)
+app.use('/',question)
 // app.use(/,)
 // app.use(/,)
 

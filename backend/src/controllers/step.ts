@@ -1,13 +1,16 @@
 import { Request,Response } from "express";
 import prisma from "../prisma/prisma";
 
+interface step  {
+    step: string
+}
 
 export const fetchStep = async (req:Request, res: Response): Promise<void> => {
     const {id} = req.params
     
     try {
         const queryStep = Number(id)
-        const data = await prisma.instruction.findUnique({
+        const data: step | null = await prisma.instruction.findFirst({
             where: {id : queryStep}
         }) 
         if(data) {
