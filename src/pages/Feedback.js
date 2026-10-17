@@ -4,24 +4,48 @@ export default function Feedback({ setCurrentPage }) {
   const [rating, setRating] = useState(null);
   const [message, setMessage] = useState('');
   const [showNotification, setShowNotification] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e) => {
+  
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Display the success notification banner
-    setShowNotification(true);
+    setIsSubmitting(true);
 
-    // Clear form fields after submission
-    setMessage('');
-    setRating(null);
+    try {
+      const response = await fetch('http://localhost:5000/api/feedback/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message, rating }),
+      });
 
-    // Redirect to the home page after a short delay
-    setTimeout(() => {
-      setShowNotification(false);
-      if (setCurrentPage) {
-        setCurrentPage('home');
+      const result = await response.json();
+
+      if (result.success) {
+        // Display the success notification banner
+        setShowNotification(true);
+
+        // Clear form fields after submission
+        setMessage('');
+        setRating(null);
+
+        // Redirect to the home page after a short delay
+        setTimeout(() => {
+          setShowNotification(false);
+          if (setCurrentPage) {
+            setCurrentPage('home');
+          }
+        }, 1500);
+      } else {
+        alert('Failed to submit feedback. Please try again.');
       }
-    }, 1500);
+    } catch (err) {
+      console.error("API Submit Error:", err);
+      alert('Error connecting to backend server.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -86,9 +110,10 @@ export default function Feedback({ setCurrentPage }) {
           <div className="pt-4">
             <button
               type="submit"
-              className="w-full py-3.5 bg-[#ff5500] hover:bg-[#e04b00] text-white font-black text-base rounded-2xl shadow-xl transition cursor-pointer"
+              disabled={isSubmitting}
+              className="w-full py-3.5 bg-[#ff5500] hover:bg-[#e04b00] text-white font-black text-base rounded-2xl shadow-xl transition cursor-pointer disabled:opacity-50"
             >
-              Submit
+              {isSubmitting ? 'Submitting...' : 'Submit'}
             </button>
           </div>
         </form>

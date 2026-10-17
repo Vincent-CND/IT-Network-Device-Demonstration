@@ -81,53 +81,111 @@ function MatrixBackground() {
 
 export default function Game({ setCurrentPage }) {
   const [activeStep, setActiveStep] = useState(0);
-  const [answers, setAnswers] = useState(['', '', '', '']);
+  const [answers, setAnswers] = useState([]);
   const [currentHintIndex, setCurrentHintIndex] = useState(null);
   const [showCongrats, setShowCongrats] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  // API Data States
+  const [questionsData, setQuestionsData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // References to track question card positions for smooth robot movement
   const cardRefs = useRef([]);
 
-  const questions = [
-    "Q1. Find the most important cable.",
-    "Q2. Find the Raspberry Pi, also called the \"Endpoint,\" in the first box.",
-    "Q3. Find the \"Bridge,\" also called a switch.",
-    "Q4. Find the \"Boat,\" also called a router."
-  ];
-
-  const hints = [
-    "Appearance of devices.",
-    "Think about it. It looks like your computer.",
-    "Imagine it is relevant to a real bridge, which is visited by many people.",
-    "It will be the last device, but it serves as the boat to transport the goods to another world."
-  ];
-
-  // Calculate dynamic top offset for the robot companion based on active question card position
+  // Dynamic top offset for robot companion
   const [robotTop, setRobotTop] = useState(0);
 
+  // -------------------------------------------------------------
+  // API Call 1: Fetch Questions and Hints from Backend (GET)
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/game/questions');
+        if (!response.ok) {
+          throw new Error('Failed to fetch game questions');
+        }
+        const result = await response.json();
+        
+        if (result.success) {
+          setQuestionsData(result.data);
+          // Initialize answers array based on the number of questions
+          setAnswers(new Array(result.data.length).fill(''));
+        }
+      } catch (err) {
+        console.error("API Fetch Error:", err);
+        setError("Failed to load questions from backend server.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchQuestions();
+  }, []);
+
+  // Calculate dynamic top offset for the robot companion
   useEffect(() => {
     if (cardRefs.current[activeStep]) {
       const cardElement = cardRefs.current[activeStep];
       setRobotTop(cardElement.offsetTop);
     }
-  }, [activeStep]);
+  }, [activeStep, questionsData]);
 
   const handleDone = (index) => {
-    if (answers[index].trim() !== '') {
-      if (index === activeStep && activeStep < 3) {
+    if (answers[index] && answers[index].trim() !== '') {
+      if (index === activeStep && activeStep < questionsData.length - 1) {
         setActiveStep(activeStep + 1);
-      } else if (index === 3) {
+      } else if (index === questionsData.length - 1) {
         setIsCompleted(true);
       }
     }
   };
 
-  const handleSubmit = () => {
+  // -------------------------------------------------------------
+  // API Call 2: Submit Answers to Backend (POST)
+  // -------------------------------------------------------------
+  const handleSubmit = async () => {
     if (isCompleted && answers.every(a => a.trim() !== '')) {
-      setShowCongrats(true);
+      try {
+        const response = await fetch('http://localhost:5000/api/game/submit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ answers }),
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          setShowCongrats(true);
+        } else {
+          alert('Submission failed. Please try again.');
+        }
+      } catch (err) {
+        console.error("API Submit Error:", err);
+        alert("Error connecting to backend server.");
+      }
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#040c0e] flex items-center justify-center text-white font-black text-xl">
+        Loading Cyber Quest Data...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#040c0e] flex items-center justify-center text-red-500 font-bold text-lg">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#040c0e] py-12 px-6 flex flex-col items-center justify-center relative overflow-hidden">
@@ -141,7 +199,7 @@ export default function Game({ setCurrentPage }) {
         <span className="text-white font-black text-sm tracking-widest">CYBER QUEST</span>
       </div>
 
-      {/* Main layout container with relative positioning for smooth robot movement */}
+      {/* Main layout container */}
       <div className="w-full max-w-5xl relative z-10 lg:pl-40">
         
         {/* Moving robot companion on the left side */}
@@ -184,13 +242,13 @@ export default function Game({ setCurrentPage }) {
 
         {/* Questions card list */}
         <div className="space-y-4 w-full">
-          {questions.map((q, index) => {
+          {questionsData.map((item, index) => {
             const isUnlocked = index <= activeStep;
             const isCurrentActive = index === activeStep && !isCompleted;
 
             return (
               <div 
-                key={index} 
+                key={item.id || index} 
                 ref={(el) => (cardRefs.current[index] = el)}
                 className={`bg-[#061215]/95 backdrop-blur-md border-2 transition-all duration-300 p-6 rounded-none ${
                   isCurrentActive
@@ -202,14 +260,14 @@ export default function Game({ setCurrentPage }) {
               >
                 <div className="grid md:grid-cols-2 gap-6 items-center">
                   <p className="text-gray-200 text-base md:text-lg leading-relaxed font-sans font-medium">
-                    {q}
+                    {item.question}
                   </p>
 
                   <div className="flex flex-col space-y-3">
                     <input
                       type="text"
                       disabled={!isUnlocked}
-                      value={answers[index]}
+                      value={answers[index] || ''}
                       onChange={(e) => {
                         const newAns = [...answers];
                         newAns[index] = e.target.value;
@@ -260,9 +318,9 @@ export default function Game({ setCurrentPage }) {
       </div>
 
       {/* Dynamic hint modal component */}
-      {currentHintIndex !== null && (
+      {currentHintIndex !== null && questionsData[currentHintIndex] && (
         <HintModal 
-          hintText={hints[currentHintIndex]} 
+          hintText={questionsData[currentHintIndex].hint} 
           onClose={() => setCurrentHintIndex(null)} 
         />
       )}

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import boxAImg from '../assets/boxA.png';
 import boxBImg from '../assets/boxB.png';
 
@@ -9,8 +9,38 @@ export default function Mission({ setCurrentPage }) {
   const [expandedSteps, setExpandedSteps] = useState([]);
   const [shakingId, setShakingId] = useState(null);
 
+  // API Data States
+  const [missionData, setMissionData] = useState({ boxes: [], steps: [] });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // Initialize audio reference for box click effects
   const audioRef = useRef(new Audio(clickSoundFile));
+
+  // -------------------------------------------------------------
+  // API Call: Fetch Mission Data (Boxes and Steps) from Backend
+  // -------------------------------------------------------------
+  useEffect(() => {
+    const fetchMissionData = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/api/mission/data');
+        if (!response.ok) {
+          throw new Error('Failed to fetch mission data');
+        }
+        const result = await response.json();
+        if (result.success) {
+          setMissionData(result.data);
+        }
+      } catch (err) {
+        console.error("API Fetch Error:", err);
+        setError("Failed to load mission data from backend server.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMissionData();
+  }, []);
 
   const playCustomSound = () => {
     if (audioRef.current) {
@@ -41,38 +71,21 @@ export default function Mission({ setCurrentPage }) {
     triggerShake(boxId);
   };
 
-  const steps = [
-    { 
-      id: 1, 
-      title: 'STEP 1', 
-      description: 'Your world has been taken from the enemy.',
-      colorClass: 'bg-gradient-to-br from-[#164e20] to-[#257933] border-[#388e45] hover:shadow-[0_0_20px_rgba(37,121,51,0.6)]'
-    },
-    { 
-      id: 2, 
-      title: 'STEP 2', 
-      description: 'Mission is to create a way to save your world.',
-      colorClass: 'bg-gradient-to-br from-[#1b5e25] to-[#2e8b3f] border-[#43a047] hover:shadow-[0_0_20px_rgba(46,139,63,0.6)]'
-    },
-    { 
-      id: 3, 
-      title: 'STEP 3', 
-      description: 'You are going to have 4 different questions and hints to solve it.',
-      colorClass: 'bg-gradient-to-br from-[#20692B] to-[#34a847] border-[#4caf50] hover:shadow-[0_0_20px_rgba(52,168,71,0.6)]'
-    },
-    { 
-      id: 4, 
-      title: 'STEP 4', 
-      description: 'You also have 2 boxes with different components inside.',
-      colorClass: 'bg-gradient-to-br from-[#185522] to-[#267333] border-[#388e45] hover:shadow-[0_0_20px_rgba(38,142,51,0.6)]'
-    },
-    { 
-      id: 5, 
-      title: 'STEP 5', 
-      description: 'If you can successfully solve all, and find the way to cope with the final one, you win the game and get a prize.',
-      colorClass: 'bg-gradient-to-br from-[#124219] to-[#1e5c27] border-[#2e7d32] hover:shadow-[0_0_20px_rgba(30,125,39,0.6)]'
-    },
-  ];
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#071317] flex items-center justify-center text-white font-black text-xl">
+        Loading Mission Data...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#071317] flex items-center justify-center text-red-500 font-bold text-lg">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div className="w-full">
@@ -96,7 +109,6 @@ export default function Mission({ setCurrentPage }) {
           
           {/* Box A Column */}
           <div className="flex flex-col items-center">
-            {/* Box A image container - clickable and shakeable */}
             <div 
               onClick={() => handleBoxImageClick('boxA')}
               className={`w-full max-w-md h-72 flex items-center justify-center mb-6 overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 ${
@@ -109,15 +121,16 @@ export default function Mission({ setCurrentPage }) {
                 className="w-full h-full object-contain filter drop-shadow-[0_15px_25px_rgba(0,0,0,0.6)] hover:brightness-110"
               />
             </div>
-            <h3 className="text-3xl font-black tracking-wider text-white mb-2">BOX A</h3>
+            <h3 className="text-3xl font-black tracking-wider text-white mb-2">
+              {missionData.boxes[0]?.title || 'BOX A'}
+            </h3>
             <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+              {missionData.boxes[0]?.description}
             </p>
           </div>
 
           {/* Box B Column */}
           <div className="flex flex-col items-center">
-            {/* Box B image container - clickable and shakeable */}
             <div 
               onClick={() => handleBoxImageClick('boxB')}
               className={`w-full max-w-md h-72 flex items-center justify-center mb-6 overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-105 ${
@@ -130,9 +143,11 @@ export default function Mission({ setCurrentPage }) {
                 className="w-full h-full object-contain filter drop-shadow-[0_15px_25px_rgba(0,0,0,0.6)] hover:brightness-110"
               />
             </div>
-            <h3 className="text-3xl font-black tracking-wider text-white mb-2">BOX B</h3>
+            <h3 className="text-3xl font-black tracking-wider text-white mb-2">
+              {missionData.boxes[1]?.title || 'BOX B'}
+            </h3>
             <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
-              Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+              {missionData.boxes[1]?.description}
             </p>
           </div>
 
@@ -142,15 +157,26 @@ export default function Mission({ setCurrentPage }) {
       {/* Step buttons section */}
       <div className="bg-white py-20 px-6 text-center">
         <div className="flex flex-col items-center space-y-6 max-w-3xl mx-auto mb-12">
-          {steps.map((step) => {
+          {missionData.steps.map((step) => {
             const isExpanded = expandedSteps.includes(step.id);
+
+            // Predefined gradient colors mapped dynamically for steps
+            const colorClasses = [
+              'bg-gradient-to-br from-[#164e20] to-[#257933] border-[#388e45] hover:shadow-[0_0_20px_rgba(37,121,51,0.6)]',
+              'bg-gradient-to-br from-[#1b5e25] to-[#2e8b3f] border-[#43a047] hover:shadow-[0_0_20px_rgba(46,139,63,0.6)]',
+              'bg-gradient-to-br from-[#20692B] to-[#34a847] border-[#4caf50] hover:shadow-[0_0_20px_rgba(52,168,71,0.6)]',
+              'bg-gradient-to-br from-[#185522] to-[#267333] border-[#388e45] hover:shadow-[0_0_20px_rgba(38,142,51,0.6)]',
+              'bg-gradient-to-br from-[#124219] to-[#1e5c27] border-[#2e7d32] hover:shadow-[0_0_20px_rgba(30,125,39,0.6)]'
+            ];
+
+            const assignedColor = colorClasses[(step.id - 1) % colorClasses.length];
 
             return (
               <button
                 key={step.id}
                 onClick={() => handleStepClick(step.id)}
                 className={`transition-all duration-300 ease-in-out cursor-pointer flex flex-col items-center justify-center text-white shadow-xl border-2 ${
-                  step.colorClass
+                  assignedColor
                 } ${
                   isExpanded
                     ? 'w-full max-w-2xl rounded-[50px] py-6 px-8 scale-100 shadow-2xl'
