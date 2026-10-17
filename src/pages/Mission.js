@@ -9,7 +9,7 @@ export default function Mission({ setCurrentPage }) {
   const [expandedSteps, setExpandedSteps] = useState([]);
   const [shakingId, setShakingId] = useState(null);
 
-  // API Data States for Steps fetched from backend
+  // API Data States
   const [stepsData, setStepsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -17,32 +17,49 @@ export default function Mission({ setCurrentPage }) {
   // Initialize audio reference for box click effects
   const audioRef = useRef(new Audio(clickSoundFile));
 
+  // Default fallback steps (If backend is offline or empty)
+  const defaultSteps = [
+    { id: 1, title: 'Step 1', description: 'Your world will have been taken from the enemy.' },
+    { id: 2, title: 'Step 2', description: 'Mission is to create a way to save your world.' },
+    { id: 3, title: 'Step 3', description: "You're gonna have 5 different questions and hint to solve it." },
+    { id: 4, title: 'Step 4', description: 'You also have two boxes with different components inside.' },
+    { id: 5, title: 'Step 5', description: 'If you can solve successfully all, and find the way to cope with final on, you win the game and get a prize.' }
+  ];
+
   // -------------------------------------------------------------
-  // API Call: Fetch Steps one by one using developer's getStep format
+  // API Call: Fetch Steps safely without breaking the UI
   // -------------------------------------------------------------
   useEffect(() => {
     const fetchAllSteps = async () => {
       try {
         const stepsArray = [];
+        let fetchedAny = false;
+
         for (let i = 1; i <= 5; i++) {
-          const response = await fetch(`http://localhost:3000/step/${encodeURIComponent(i)}`);
-          
-          if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+          try {
+            const response = await fetch(`http://localhost:3000/step/${encodeURIComponent(i)}`);
+            if (response.ok) {
+              const result = await response.json();
+              stepsArray.push({
+                id: i,
+                title: `Step ${i}`,
+                description: result.message || defaultSteps[i - 1].description
+              });
+              fetchedAny = true;
+            } else {
+              stepsArray.push(defaultSteps[i - 1]);
+            }
+          } catch (e) {
+            // If individual step fetch fails, use fallback step data
+            stepsArray.push(defaultSteps[i - 1]);
           }
-          
-          const result = await response.json();
-          stepsArray.push({
-            id: i,
-            title: `Step ${i}`,
-            description: result.message || "No description available"
-          });
         }
 
         setStepsData(stepsArray);
       } catch (err) {
         console.error("API Fetch Error:", err);
-        setError("Failed to load mission steps from backend server.");
+        // Fallback to default steps if server connection completely fails
+        setStepsData(defaultSteps);
       } finally {
         setLoading(false);
       }
@@ -65,7 +82,6 @@ export default function Mission({ setCurrentPage }) {
     }, 400); // 400ms shake duration
   };
 
-  // Step button click handler to expand or collapse details
   const handleStepClick = (id) => {
     setExpandedSteps((prev) =>
       prev.includes(id)
@@ -74,7 +90,6 @@ export default function Mission({ setCurrentPage }) {
     );
   };
 
-  // Box image click handler with sound and shake animation enabled
   const handleBoxImageClick = (boxId) => {
     playCustomSound();
     triggerShake(boxId);
@@ -84,14 +99,6 @@ export default function Mission({ setCurrentPage }) {
     return (
       <div className="min-h-screen bg-[#071317] flex items-center justify-center text-white font-black text-xl">
         Loading Mission Data...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-[#071317] flex items-center justify-center text-red-500 font-bold text-lg">
-        {error}
       </div>
     );
   }
