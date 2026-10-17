@@ -1,714 +1,511 @@
 
-import React, { useState, useEffect, useRef } from "react";
-import logoImg from "../assets/game-logo.png";
+import React, { useState, useEffect, useRef } from 'react';
+import HintModal from '../components/HintModal';
+import CongratsModal from '../components/CongratsModal';
+import logoImg from '../assets/game-logo.png';
 
-// API base URL
-const API_URL = "http://localhost:3000";
-
-// Matrix digital rain background
+// Matrix digital rain background canvas component
 function MatrixBackground() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    let animationFrameId;
+    let lastTime = 0;
+    const fps = 25;
+    const interval = 1000 / fps;
 
-    let animationId;
-    let width = 0;
-    let height = 0;
-    let columns = 0;
-    let drops = [];
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
 
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    const characters = '01';
     const fontSize = 16;
-    const characters = "01アイウエオカキクケコサシスセソ";
+    const columns = Math.floor(canvas.width / fontSize);
 
-    function resizeCanvas() {
-      const ratio = window.devicePixelRatio || 1;
+    const drops = Array.from(
+      { length: columns },
+      () => Math.floor(Math.random() * -100)
+    );
 
-      width = window.innerWidth;
-      height = window.innerHeight;
+    const draw = (currentTime) => {
+      animationFrameId = requestAnimationFrame(draw);
 
-      canvas.width = width * ratio;
-      canvas.height = height * ratio;
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
+      const deltaTime = currentTime - lastTime;
+      if (deltaTime < interval) return;
 
-      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      lastTime = currentTime - (deltaTime % interval);
 
-      columns = Math.ceil(width / fontSize);
-      drops = Array.from(
-        { length: columns },
-        () => Math.random() * (height / fontSize)
-      );
-    }
+      ctx.fillStyle = 'rgba(4, 12, 14, 0.35)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    function draw() {
-      ctx.fillStyle = "rgba(0, 0, 0, 0.08)";
-      ctx.fillRect(0, 0, width, height);
-
-      ctx.font = `${fontSize}px monospace`;
+      ctx.font = `${fontSize}px "Fredoka", monospace`;
 
       for (let i = 0; i < drops.length; i++) {
-        const character =
-          characters[Math.floor(Math.random() * characters.length)];
+        const text = characters.charAt(
+          Math.floor(Math.random() * characters.length)
+        );
+
+        ctx.fillStyle = '#1c5d26';
+        ctx.shadowBlur = 0;
 
         const x = i * fontSize;
         const y = drops[i] * fontSize;
 
-        ctx.fillStyle = "#00ff66";
-        ctx.fillText(character, x, y);
+        ctx.fillText(text, x, y);
 
-        if (y > height && Math.random() > 0.975) {
+        if (y > canvas.height && Math.random() > 0.98) {
           drops[i] = 0;
-        } else {
-          drops[i]++;
         }
+
+        drops[i]++;
       }
+    };
 
-      animationId = requestAnimationFrame(draw);
-    }
-
-    resizeCanvas();
-    draw();
-
-    window.addEventListener("resize", resizeCanvas);
+    animationFrameId = requestAnimationFrame(draw);
 
     return () => {
-      cancelAnimationFrame(animationId);
-      window.removeEventListener("resize", resizeCanvas);
+      window.removeEventListener('resize', resizeCanvas);
+      cancelAnimationFrame(animationFrameId);
     };
   }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      aria-hidden="true"
-      className="pointer-events-none fixed inset-0 z-0 opacity-30"
+      className="fixed inset-0 w-full h-full pointer-events-none z-0"
     />
   );
 }
 
-// Supports common API response formats
-function getQuestionData(response) {
-  if (response?.data?.question) {
-    return response.data;
-  }
-
-  if (response?.question) {
-    return response;
-  }
-
-  if (response?.message) {
-    return {
-      question: response.message,
-      hint: "",
-    };
-  }
-
-  return {
-    question: "Question data is unavailable.",
-    hint: "",
-  };
-}
-
-function getHintText(response) {
-  if (typeof response?.data === "string") {
-    return response.data;
-  }
-
-  return (
-    response?.data?.hint ||
-    response?.hint ||
-    response?.message ||
-    "No hint is available."
-  );
-}
-
-export default function Game() {
-  const [steps, setSteps] = useState(["", "", "", "", ""]);
-  const [questions, setQuestions] = useState([]);
-  const [answers, setAnswers] = useState(["", "", "", "", ""]);
-  const [hints, setHints] = useState(["", "", "", "", ""]);
-
-  const [activeQuestion, setActiveQuestion] = useState(0);
-  const [completedQuestions, setCompletedQuestions] = useState([]);
-  const [showHint, setShowHint] = useState(false);
+export default function Game({ setCurrentPage }) {
+  const [activeStep, setActiveStep] = useState(0);
+  const [answers, setAnswers] = useState([]);
+  const [currentHintText, setCurrentHintText] = useState(null);
   const [showCongrats, setShowCongrats] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
 
+  // API Data States
+  const [stepsData, setStepsData] = useState([]);
+  const [questionsData, setQuestionsData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [hintLoading, setHintLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  // Load steps and questions from the backend
+  // References to track question card positions
+  const cardRefs = useRef([]);
+
+  // Dynamic top offset for robot companion
+  const [robotTop, setRobotTop] = useState(0);
+
+  // -------------------------------------------------------------
+  // API Calls: Fetch Steps and Questions
+  // No loop used for API requests
+  // -------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
 
-    async function loadGame() {
-      setLoading(true);
-      setError("");
-
+    const fetchGameData = async () => {
       try {
+        setLoading(true);
+        setError(null);
+
         // GET /step/1
-        const response1 = await fetch(`${API_URL}/step/1`);
-        if (!response1.ok) {
-          throw new Error(`Step 1 API error: ${response1.status}`);
+        const stepResponse1 = await fetch('http://localhost:3000/step/1');
+        if (!stepResponse1.ok) {
+          throw new Error(`Step 1 API error: ${stepResponse1.status}`);
         }
-        const stepData1 = await response1.json();
+        const stepResult1 = await stepResponse1.json();
 
         // GET /step/2
-        const response2 = await fetch(`${API_URL}/step/2`);
-        if (!response2.ok) {
-          throw new Error(`Step 2 API error: ${response2.status}`);
+        const stepResponse2 = await fetch('http://localhost:3000/step/2');
+        if (!stepResponse2.ok) {
+          throw new Error(`Step 2 API error: ${stepResponse2.status}`);
         }
-        const stepData2 = await response2.json();
+        const stepResult2 = await stepResponse2.json();
 
         // GET /step/3
-        const response3 = await fetch(`${API_URL}/step/3`);
-        if (!response3.ok) {
-          throw new Error(`Step 3 API error: ${response3.status}`);
+        const stepResponse3 = await fetch('http://localhost:3000/step/3');
+        if (!stepResponse3.ok) {
+          throw new Error(`Step 3 API error: ${stepResponse3.status}`);
         }
-        const stepData3 = await response3.json();
+        const stepResult3 = await stepResponse3.json();
 
         // GET /step/4
-        const response4 = await fetch(`${API_URL}/step/4`);
-        if (!response4.ok) {
-          throw new Error(`Step 4 API error: ${response4.status}`);
+        const stepResponse4 = await fetch('http://localhost:3000/step/4');
+        if (!stepResponse4.ok) {
+          throw new Error(`Step 4 API error: ${stepResponse4.status}`);
         }
-        const stepData4 = await response4.json();
+        const stepResult4 = await stepResponse4.json();
 
         // GET /step/5
-        const response5 = await fetch(`${API_URL}/step/5`);
-        if (!response5.ok) {
-          throw new Error(`Step 5 API error: ${response5.status}`);
+        const stepResponse5 = await fetch('http://localhost:3000/step/5');
+        if (!stepResponse5.ok) {
+          throw new Error(`Step 5 API error: ${stepResponse5.status}`);
         }
-        const stepData5 = await response5.json();
+        const stepResult5 = await stepResponse5.json();
 
         // GET /question/1
-        const questionResponse1 = await fetch(`${API_URL}/question/1`);
+        const questionResponse1 = await fetch(
+          'http://localhost:3000/question/1'
+        );
         if (!questionResponse1.ok) {
           throw new Error(`Question 1 API error: ${questionResponse1.status}`);
         }
-        const questionData1 = await questionResponse1.json();
+        const questionResult1 = await questionResponse1.json();
 
         // GET /question/2
-        const questionResponse2 = await fetch(`${API_URL}/question/2`);
+        const questionResponse2 = await fetch(
+          'http://localhost:3000/question/2'
+        );
         if (!questionResponse2.ok) {
           throw new Error(`Question 2 API error: ${questionResponse2.status}`);
         }
-        const questionData2 = await questionResponse2.json();
+        const questionResult2 = await questionResponse2.json();
 
         // GET /question/3
-        const questionResponse3 = await fetch(`${API_URL}/question/3`);
+        const questionResponse3 = await fetch(
+          'http://localhost:3000/question/3'
+        );
         if (!questionResponse3.ok) {
           throw new Error(`Question 3 API error: ${questionResponse3.status}`);
         }
-        const questionData3 = await questionResponse3.json();
+        const questionResult3 = await questionResponse3.json();
 
         // GET /question/4
-        const questionResponse4 = await fetch(`${API_URL}/question/4`);
+        const questionResponse4 = await fetch(
+          'http://localhost:3000/question/4'
+        );
         if (!questionResponse4.ok) {
           throw new Error(`Question 4 API error: ${questionResponse4.status}`);
         }
-        const questionData4 = await questionResponse4.json();
-
-        // GET /question/5
-        const questionResponse5 = await fetch(`${API_URL}/question/5`);
-        if (!questionResponse5.ok) {
-          throw new Error(`Question 5 API error: ${questionResponse5.status}`);
-        }
-        const questionData5 = await questionResponse5.json();
+        const questionResult4 = await questionResponse4.json();
 
         if (cancelled) return;
 
-        setSteps([
-          stepData1.message || "",
-          stepData2.message || "",
-          stepData3.message || "",
-          stepData4.message || "",
-          stepData5.message || "",
+        setStepsData([
+          stepResult1.message,
+          stepResult2.message,
+          stepResult3.message,
+          stepResult4.message,
+          stepResult5.message,
         ]);
 
-        setQuestions([
-          getQuestionData(questionData1),
-          getQuestionData(questionData2),
-          getQuestionData(questionData3),
-          getQuestionData(questionData4),
-          getQuestionData(questionData5),
-        ]);
+        const question1 = questionResult1.data || questionResult1;
+        const question2 = questionResult2.data || questionResult2;
+        const question3 = questionResult3.data || questionResult3;
+        const question4 = questionResult4.data || questionResult4;
+
+        const fetchedQuestions = [
+          question1,
+          question2,
+          question3,
+          question4,
+        ];
+
+        setQuestionsData(fetchedQuestions);
+        setAnswers(['', '', '', '']);
       } catch (err) {
+        console.error('API Fetch Error:', err);
+
         if (!cancelled) {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Could not load game data."
-          );
+          setError('Failed to load questions from backend server.');
         }
       } finally {
         if (!cancelled) {
           setLoading(false);
         }
       }
-    }
+    };
 
-    loadGame();
+    fetchGameData();
 
     return () => {
       cancelled = true;
     };
   }, []);
 
-  // Load the hint for the currently selected question
-  async function handleShowHint() {
-    setShowHint(true);
-    setHintLoading(true);
-    setError("");
+  // Calculate dynamic top offset for robot companion
+  useEffect(() => {
+    if (cardRefs.current[activeStep]) {
+      const cardElement = cardRefs.current[activeStep];
+      setRobotTop(cardElement.offsetTop);
+    }
+  }, [activeStep, questionsData]);
 
+  // -------------------------------------------------------------
+  // API Calls: Fetch Hints
+  // -------------------------------------------------------------
+  const handleHint = async (index, item) => {
     try {
-      let hintResponse;
+      let hintResult;
 
-      if (activeQuestion === 0) {
+      if (index === 0) {
         // GET /get/hint/1
-        const response = await fetch(`${API_URL}/get/hint/1`);
+        const response = await fetch('http://localhost:3000/get/hint/1');
         if (!response.ok) throw new Error(`Hint API error: ${response.status}`);
-        hintResponse = await response.json();
-      } else if (activeQuestion === 1) {
+        hintResult = await response.json();
+      } else if (index === 1) {
         // GET /get/hint/2
-        const response = await fetch(`${API_URL}/get/hint/2`);
+        const response = await fetch('http://localhost:3000/get/hint/2');
         if (!response.ok) throw new Error(`Hint API error: ${response.status}`);
-        hintResponse = await response.json();
-      } else if (activeQuestion === 2) {
+        hintResult = await response.json();
+      } else if (index === 2) {
         // GET /get/hint/3
-        const response = await fetch(`${API_URL}/get/hint/3`);
+        const response = await fetch('http://localhost:3000/get/hint/3');
         if (!response.ok) throw new Error(`Hint API error: ${response.status}`);
-        hintResponse = await response.json();
-      } else if (activeQuestion === 3) {
+        hintResult = await response.json();
+      } else if (index === 3) {
         // GET /get/hint/4
-        const response = await fetch(`${API_URL}/get/hint/4`);
+        const response = await fetch('http://localhost:3000/get/hint/4');
         if (!response.ok) throw new Error(`Hint API error: ${response.status}`);
-        hintResponse = await response.json();
-      } else if (activeQuestion === 4) {
-        // GET /get/hint/5
-        const response = await fetch(`${API_URL}/get/hint/5`);
-        if (!response.ok) throw new Error(`Hint API error: ${response.status}`);
-        hintResponse = await response.json();
+        hintResult = await response.json();
       }
 
-      const hintText = getHintText(hintResponse);
+      const hintText =
+        hintResult?.data?.hint ??
+        hintResult?.data?.message ??
+        hintResult?.hint ??
+        hintResult?.message ??
+        item.hint ??
+        'No hint available.';
 
-      setHints((previous) =>
-        previous.map((value, index) =>
-          index === activeQuestion ? hintText : value
-        )
-      );
+      setCurrentHintText(hintText);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not load the hint."
-      );
-    } finally {
-      setHintLoading(false);
+      console.error('API Hint Error:', err);
+
+      // Use the hint already included in the question response, if available.
+      if (item.hint) {
+        setCurrentHintText(item.hint);
+      } else {
+        setError('Failed to load hint from backend server.');
+      }
     }
-  }
+  };
 
-  // Submit an answer to POST /answer
-  async function handleSubmitAnswer(event) {
-    event.preventDefault();
-
-    const currentAnswer = answers[activeQuestion].trim();
-
-    if (!currentAnswer || submitting) return;
-
-    setSubmitting(true);
-    setError("");
-
-    try {
-      const response = await fetch(`${API_URL}/answer`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          questionId: activeQuestion + 1,
-          answer: currentAnswer,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.message || `Answer API error: ${response.status}`);
+  const handleDone = (index) => {
+    if (answers[index] && answers[index].trim() !== '') {
+      if (index === activeStep && activeStep < questionsData.length - 1) {
+        setActiveStep(activeStep + 1);
+      } else if (index === questionsData.length - 1) {
+        setIsCompleted(true);
       }
-
-      const isCorrect =
-        result.success === true ||
-        result.correct === true ||
-        result.isCorrect === true;
-
-      if (!isCorrect) {
-        setError(result.message || "Incorrect answer. Try again!");
-        return;
-      }
-
-      const nextCompleted = completedQuestions.includes(activeQuestion)
-        ? completedQuestions
-        : [...completedQuestions, activeQuestion];
-
-      setCompletedQuestions(nextCompleted);
-
-      if (nextCompleted.length === 5) {
-        setShowCongrats(true);
-      } else if (activeQuestion < 4) {
-        setActiveQuestion(activeQuestion + 1);
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Could not submit your answer."
-      );
-    } finally {
-      setSubmitting(false);
     }
-  }
+  };
 
-  function handleAnswerChange(value) {
-    setAnswers((previous) =>
-      previous.map((answer, index) =>
-        index === activeQuestion ? value : answer
-      )
+  // -------------------------------------------------------------
+  // API Call: Submit Answers to Backend
+  // POST /answer
+  // -------------------------------------------------------------
+  const handleSubmit = async () => {
+    if (isCompleted && answers.every((answer) => answer.trim() !== '')) {
+      try {
+        const response = await fetch('http://localhost:3000/answer', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ answers }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`API error: ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (result.success || result.message) {
+          setShowCongrats(true);
+        } else {
+          alert('Submission failed. Please try again.');
+        }
+      } catch (err) {
+        console.error('API Submit Error:', err);
+        alert('Error connecting to backend server.');
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#040c0e] flex items-center justify-center text-white font-black text-xl">
+        Loading Cyber Quest Data...
+      </div>
     );
   }
 
-  const currentQuestion = questions[activeQuestion];
-  const progress = (completedQuestions.length / 5) * 100;
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#040c0e] flex items-center justify-center text-red-500 font-bold text-lg">
+        {error}
+      </div>
+    );
+  }
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-black text-green-300">
+    <div className="min-h-screen bg-[#040c0e] py-12 px-6 flex flex-col items-center justify-center relative overflow-hidden">
       <MatrixBackground />
 
-      <main className="relative z-10 mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
-        {/* Header */}
-        <header className="mb-8 flex flex-wrap items-center justify-between gap-4 border-b border-green-500/30 pb-5">
-          <div className="flex items-center gap-3">
-            <img
-              src={logoImg}
-              alt="Cyber Quest logo"
-              className="h-12 w-12 object-contain"
-            />
-            <div>
-              <h1 className="text-2xl font-black tracking-widest text-green-400 sm:text-3xl">
-                CYBER QUEST
-              </h1>
-              <p className="text-xs tracking-wider text-green-700">
-                MISSION: SAVE YOUR WORLD
-              </p>
+      {/* Cyber Quest Header Logo */}
+      <div className="flex flex-col items-center justify-center mb-8 relative z-10">
+        <div className="w-16 h-16 flex items-center justify-center mb-1">
+          <img
+            src={logoImg}
+            alt="Cyber Quest Logo"
+            className="w-full h-full object-contain filter drop-shadow-[0_0_10px_rgba(114,192,44,0.4)]"
+          />
+        </div>
+        <span className="text-white font-black text-sm tracking-widest">
+          CYBER QUEST
+        </span>
+      </div>
+
+      {/* Main layout container */}
+      <div className="w-full max-w-5xl relative z-10 lg:pl-40">
+
+        {/* Moving robot companion on the left side */}
+        <div
+          className="hidden lg:flex flex-col items-center p-4 bg-[#061215]/95 border-2 border-[#72c02c] rounded-3xl shadow-[0_0_25px_rgba(114,192,44,0.3)] backdrop-blur-md absolute left-0 w-32 transition-all duration-500 ease-in-out z-20"
+          style={{ top: `${robotTop}px` }}
+        >
+          <style>{`
+            @keyframes floatAnim {
+              0%, 100% { transform: translateY(0px) rotate(0deg); }
+              50% { transform: translateY(-6px) rotate(1deg); }
+            }
+            .animate-float {
+              animation: floatAnim 3s ease-in-out infinite;
+            }
+          `}</style>
+
+          <div className="relative w-20 h-20 bg-[#0b1b20] border-2 border-[#72c02c] rounded-2xl flex flex-col items-center justify-center shadow-inner animate-float mb-2">
+            <div className="absolute -top-2 w-3 h-1.5 bg-[#72c02c] rounded-full animate-ping" />
+            <div className="flex space-x-2 mb-1.5">
+              <div className="w-2.5 h-2.5 bg-[#72c02c] rounded-full shadow-[0_0_6px_#72c02c]" />
+              <div className="w-2.5 h-2.5 bg-[#72c02c] rounded-full shadow-[0_0_6px_#72c02c]" />
             </div>
+            <span className="text-[#ff5500] font-black text-[10px] tracking-widest">
+              BOT-X
+            </span>
+            <div className="w-8 h-1 bg-[#72c02c] mt-1 rounded-full shadow-[0_0_4px_rgba(114,192,44,0.8)]" />
           </div>
 
-          <div className="rounded-lg border border-green-500/40 bg-green-950/50 px-4 py-2 text-sm">
-            <span className="text-green-600">MISSIONS SOLVED: </span>
-            <span className="font-bold text-green-300">
-              {completedQuestions.length}/5
+          <div className="text-center">
+            <span className="text-[#72c02c] font-black text-xs tracking-widest">
+              Q0{activeStep + 1}
             </span>
           </div>
-        </header>
-
-        {/* Loading */}
-        {loading && (
-          <div className="rounded-xl border border-green-500/30 bg-black/80 p-8 text-center">
-            <div className="mb-3 animate-pulse text-xl font-bold text-green-400">
-              INITIALIZING MISSION...
-            </div>
-            <p className="text-sm text-green-700">
-              Connecting to the game server.
-            </p>
-          </div>
-        )}
-
-        {/* Error */}
-        {!loading && error && (
-          <div
-            role="alert"
-            className="mb-6 rounded-lg border border-red-500/50 bg-red-950/70 p-4 text-sm text-red-300"
-          >
-            <p className="font-bold">SYSTEM MESSAGE</p>
-            <p className="mt-1">{error}</p>
-            <button
-              type="button"
-              onClick={() => setError("")}
-              className="mt-3 rounded border border-red-500/40 px-3 py-1 hover:bg-red-900"
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-
-        {!loading && (
-          <>
-            {/* Story / Steps */}
-            <section className="mb-8 rounded-xl border border-green-500/40 bg-black/80 p-5 shadow-lg shadow-green-950/40 sm:p-7">
-              <div className="mb-4 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border border-green-400 bg-green-950 text-2xl">
-                  ⚠
-                </div>
-                <div>
-                  <p className="text-xs font-bold tracking-[0.2em] text-green-700">
-                    INCOMING TRANSMISSION
-                  </p>
-                  <h2 className="text-xl font-black text-green-300 sm:text-2xl">
-                    YOUR WORLD NEEDS YOU
-                  </h2>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                {steps.map((step, index) => (
-                  <div
-                    key={index}
-                    className="flex gap-3 rounded-lg border border-green-900/70 bg-green-950/20 p-3"
-                  >
-                    <span className="shrink-0 font-bold text-green-500">
-                      0{index + 1}
-                    </span>
-                    <p className="text-sm leading-6 text-green-200">
-                      {step || "No instructions available for this step."}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            {/* Progress */}
-            <section className="mb-8">
-              <div className="mb-2 flex items-center justify-between text-xs font-bold tracking-wider">
-                <span className="text-green-500">MISSION PROGRESS</span>
-                <span className="text-green-300">
-                  {Math.round(progress)}%
-                </span>
-              </div>
-              <div className="h-3 overflow-hidden rounded-full border border-green-900 bg-green-950">
-                <div
-                  className="h-full bg-green-400 transition-all duration-500"
-                  style={{ width: `${progress}%` }}
-                />
-              </div>
-            </section>
-
-            {/* Robot / mission intro */}
-            <section className="mb-8 flex items-start gap-4 rounded-xl border border-green-500/30 bg-black/80 p-5">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-green-500/40 bg-green-950/70 text-3xl">
-                🤖
-              </div>
-              <div>
-                <h2 className="mb-2 font-black tracking-wider text-green-400">
-                  BOT-X // MISSION ASSISTANT
-                </h2>
-                <p className="text-sm leading-6 text-green-200">
-                  Your world has been taken by the enemy. Explore the two
-                  equipment boxes, identify the correct network components,
-                  solve all five challenges, and find a way to save your world.
-                </p>
-              </div>
-            </section>
-
-            {/* Questions */}
-            <section className="mb-8">
-              <div className="mb-5">
-                <p className="text-xs font-bold tracking-[0.2em] text-green-700">
-                  OBJECTIVE DATABASE
-                </p>
-                <h2 className="mt-1 text-2xl font-black text-green-400">
-                  MISSION CHALLENGES
-                </h2>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                {questions.map((question, index) => {
-                  const completed = completedQuestions.includes(index);
-                  const active = activeQuestion === index;
-
-                  return (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => {
-                        if (completed || index === 0 ||
-                            completedQuestions.includes(index - 1)) {
-                          setActiveQuestion(index);
-                          setError("");
-                        }
-                      }}
-                      disabled={
-                        !completed &&
-                        index !== 0 &&
-                        !completedQuestions.includes(index - 1)
-                      }
-                      className={`min-h-28 rounded-xl border p-4 text-left transition ${
-                        completed
-                          ? "border-green-400 bg-green-950/70"
-                          : active
-                          ? "border-green-300 bg-green-900/50 shadow-lg shadow-green-900/30"
-                          : "border-green-900 bg-black/70"
-                      } disabled:cursor-not-allowed disabled:opacity-40`}
-                    >
-                      <div className="mb-3 flex items-center justify-between">
-                        <span className="text-xs font-bold tracking-widest text-green-600">
-                          QUESTION 0{index + 1}
-                        </span>
-                        <span>
-                          {completed ? "✓" : active ? "●" : "🔒"}
-                        </span>
-                      </div>
-                      <p className="text-sm font-bold text-green-200">
-                        {completed
-                          ? "MISSION COMPLETE"
-                          : active
-                          ? "ACTIVE MISSION"
-                          : "LOCKED"}
-                      </p>
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* Active question */}
-            <section className="rounded-xl border border-green-400/50 bg-black/90 p-5 shadow-xl shadow-green-950/40 sm:p-8">
-              <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-                <span className="rounded border border-green-500/40 bg-green-950/60 px-3 py-1 text-xs font-bold tracking-widest text-green-400">
-                  QUESTION 0{activeQuestion + 1} / 05
-                </span>
-
-                {completedQuestions.includes(activeQuestion) && (
-                  <span className="text-sm font-bold text-green-400">
-                    ✓ SOLVED
-                  </span>
-                )}
-              </div>
-
-              <h2 className="mb-4 text-xl font-black text-green-300 sm:text-2xl">
-                {currentQuestion?.question || "Question not available."}
-              </h2>
-
-              {currentQuestion?.description && (
-                <p className="mb-5 text-sm leading-6 text-green-200">
-                  {currentQuestion.description}
-                </p>
-              )}
-
-              <form onSubmit={handleSubmitAnswer}>
-                <label
-                  htmlFor="mission-answer"
-                  className="mb-2 block text-sm font-bold text-green-500"
-                >
-                  ENTER YOUR ANSWER
-                </label>
-
-                <input
-                  id="mission-answer"
-                  type="text"
-                  value={answers[activeQuestion]}
-                  onChange={(event) => handleAnswerChange(event.target.value)}
-                  placeholder="Type your answer..."
-                  disabled={
-                    submitting ||
-                    completedQuestions.includes(activeQuestion)
-                  }
-                  autoComplete="off"
-                  className="w-full rounded-lg border border-green-700 bg-black px-4 py-3 text-green-200 outline-none placeholder:text-green-900 focus:border-green-300 focus:ring-1 focus:ring-green-400 disabled:opacity-60"
-                />
-
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={handleShowHint}
-                    disabled={hintLoading}
-                    className="rounded-lg border border-yellow-500/60 px-5 py-3 text-sm font-bold text-yellow-300 transition hover:bg-yellow-950/50 disabled:opacity-50"
-                  >
-                    {hintLoading ? "LOADING HINT..." : "💡 GET HINT"}
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={
-                      submitting ||
-                      !answers[activeQuestion].trim() ||
-                      completedQuestions.includes(activeQuestion)
-                    }
-                    className="rounded-lg border border-green-400 bg-green-700/30 px-6 py-3 text-sm font-black tracking-wider text-green-200 transition hover:bg-green-600/40 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    {submitting ? "CHECKING..." : "SUBMIT ANSWER →"}
-                  </button>
-                </div>
-              </form>
-
-              {/* Hint */}
-              {showHint && (
-                <div className="mt-6 rounded-lg border border-yellow-500/40 bg-yellow-950/20 p-4">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <h3 className="font-bold text-yellow-300">
-                      BOT-X HINT
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => setShowHint(false)}
-                      className="text-sm text-yellow-600 hover:text-yellow-300"
-                    >
-                      Close ✕
-                    </button>
-                  </div>
-
-                  <p className="text-sm leading-6 text-yellow-100">
-                    {hintLoading
-                      ? "Retrieving hint from the server..."
-                      : hints[activeQuestion] ||
-                        currentQuestion?.hint ||
-                        "No hint returned by the server."}
-                  </p>
-                </div>
-              )}
-            </section>
-
-            {/* Footer */}
-            <footer className="mt-8 border-t border-green-900 py-5 text-center">
-              <p className="text-xs tracking-widest text-green-800">
-                CYBER QUEST // SYSTEM ONLINE // SAVE YOUR WORLD
-              </p>
-            </footer>
-          </>
-        )}
-      </main>
-
-      {/* Victory modal */}
-      {showCongrats && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="victory-title"
-        >
-          <div className="w-full max-w-lg rounded-2xl border-2 border-green-400 bg-black p-8 text-center shadow-2xl shadow-green-900/50">
-            <div className="mb-4 text-6xl">🏆</div>
-            <h2
-              id="victory-title"
-              className="mb-4 text-3xl font-black tracking-wider text-green-300"
-            >
-              WORLD SAVED!
-            </h2>
-            <p className="mb-6 leading-7 text-green-200">
-              Congratulations! You solved all five challenges and completed
-              your mission.
-            </p>
-            <button
-              type="button"
-              onClick={() => setShowCongrats(false)}
-              className="rounded-lg border border-green-400 bg-green-800/40 px-6 py-3 font-bold text-green-200 hover:bg-green-700/60"
-            >
-              CONTINUE
-            </button>
-          </div>
         </div>
+
+        {/* Mobile responsive robot position indicator */}
+        <div className="lg:hidden flex items-center justify-center mb-6 bg-[#061215]/95 border-2 border-[#72c02c] p-3 rounded-2xl shadow-[0_0_15px_rgba(114,192,44,0.3)]">
+          <span className="text-white text-xs font-bold mr-2">
+            🤖 BOT-X is at:
+          </span>
+          <span className="text-[#72c02c] font-black text-sm">
+            Question 0{activeStep + 1}
+          </span>
+        </div>
+
+        {/* Questions card list */}
+        <div className="space-y-4 w-full">
+          {questionsData.map((item, index) => {
+            const isUnlocked = index <= activeStep;
+            const isCurrentActive = index === activeStep && !isCompleted;
+
+            return (
+              <div
+                key={item.id || index}
+                ref={(el) => (cardRefs.current[index] = el)}
+                className={`bg-[#061215]/95 backdrop-blur-md border-2 transition-all duration-300 p-6 rounded-none ${
+                  isCurrentActive
+                    ? 'border-[#ff5500] shadow-[0_0_25px_rgba(255,85,0,0.3)] scale-[1.01]'
+                    : isUnlocked
+                      ? 'border-[#72c02c]/60 shadow-[0_0_15px_rgba(114,192,44,0.1)]'
+                      : 'border-emerald-950/40 opacity-20 filter blur-[1px]'
+                }`}
+              >
+                <div className="grid md:grid-cols-2 gap-6 items-center">
+                  <p className="text-gray-200 text-base md:text-lg leading-relaxed font-sans font-medium">
+                    {item.question}
+                  </p>
+
+                  <div className="flex flex-col space-y-3">
+                    <input
+                      type="text"
+                      disabled={!isUnlocked}
+                      value={answers[index] || ''}
+                      onChange={(e) => {
+                        const newAns = [...answers];
+                        newAns[index] = e.target.value;
+                        setAnswers(newAns);
+                      }}
+                      placeholder="Enter answer..."
+                      className="w-full bg-white text-black px-4 py-2.5 rounded-xl font-medium outline-none text-sm shadow-inner placeholder:text-gray-400"
+                    />
+
+                    <div className="flex space-x-3">
+                      <button
+                        disabled={!isUnlocked}
+                        onClick={() => handleHint(index, item)}
+                        className="w-1/3 bg-[#ffb703] hover:bg-[#ffa200] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
+                      >
+                        Hint
+                      </button>
+
+                      <button
+                        disabled={!isUnlocked}
+                        onClick={() => handleDone(index)}
+                        className="w-2/3 bg-[#ff5500] hover:bg-[#e04b00] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Main submit button */}
+      <div className="mt-8 relative z-10">
+        <button
+          onClick={handleSubmit}
+          disabled={
+            !isCompleted || !answers.every((answer) => answer.trim() !== '')
+          }
+          className={`w-64 py-3.5 rounded-2xl font-black text-base shadow-xl transition ${
+            isCompleted && answers.every((answer) => answer.trim() !== '')
+              ? 'bg-[#ff5500] hover:bg-[#e04b00] text-white cursor-pointer shadow-[0_0_20px_rgba(255,85,0,0.5)]'
+              : 'bg-[#3a3a3a] text-gray-400 cursor-not-allowed'
+          }`}
+        >
+          Submit
+        </button>
+      </div>
+
+      {/* Dynamic hint modal component */}
+      {currentHintText !== null && (
+        <HintModal
+          hintText={currentHintText}
+          onClose={() => setCurrentHintText(null)}
+        />
+      )}
+
+      {/* Congratulations modal component */}
+      {showCongrats && (
+        <CongratsModal
+          onClose={() => setShowCongrats(false)}
+          setCurrentPage={setCurrentPage}
+        />
       )}
     </div>
   );
