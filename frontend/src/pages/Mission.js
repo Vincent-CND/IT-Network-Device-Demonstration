@@ -7,16 +7,27 @@ import clickSoundFile from '../assets/click-box.mp3';
 const API_BASE_URL = 'http://localhost:3000';
 
 // Fetch a step by ID
-async function getStep(id) {
+async function getStep(id, signal) {
   const response = await fetch(
-    `${API_BASE_URL}/step/${encodeURIComponent(id)}`
+    `${API_BASE_URL}/step/${encodeURIComponent(id)}`,
+    { signal }
   );
 
   if (!response.ok) {
     throw new Error(`API error: ${response.status}`);
   }
 
-  return response.json();
+  const data = await response.json();
+
+  if (
+    typeof data?.message !== 'string' ||
+    data.message.trim() === '' ||
+    data.message.trim() === 'There are no more steps'
+  ) {
+    throw new Error(`Invalid data for step ${id}`);
+  }
+
+  return { id, title: `Step ${id}`, description: data.message };
 }
 
 export default function Mission({ setCurrentPage }) {
@@ -27,38 +38,10 @@ export default function Mission({ setCurrentPage }) {
   const [stepsData, setStepsData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Audio reference
   const audioRef = useRef(null);
-
-  // Default fallback steps
-  const defaultSteps = [
-    {
-      id: 1,
-      title: 'Step 1',
-      description: 'Your world will have been taken from the enemy.'
-    },
-    {
-      id: 2,
-      title: 'Step 2',
-      description: 'Mission is to create a way to save your world.'
-    },
-    {
-      id: 3,
-      title: 'Step 3',
-      description: "You're gonna have 5 different questions and hint to solve it."
-    },
-    {
-      id: 4,
-      title: 'Step 4',
-      description: 'You also have two boxes with different components inside.'
-    },
-    {
-      id: 5,
-      title: 'Step 5',
-      description: 'If you can solve successfully all, and find the way to cope with final on, you win the game and get a prize.'
-    }
-  ];
 
   // Initialize audio
   useEffect(() => {
@@ -72,139 +55,39 @@ export default function Mission({ setCurrentPage }) {
     };
   }, []);
 
-  // Fetch each step separately using getStep()
+  // Load mission steps exclusively from the backend.
   useEffect(() => {
-    let cancelled = false;
+    const controller = new AbortController();
 
     async function fetchAllSteps() {
       setLoading(true);
       setError(null);
+      setStepsData([]);
 
-      let step1 = defaultSteps[0];
-      let step2 = defaultSteps[1];
-      let step3 = defaultSteps[2];
-      let step4 = defaultSteps[3];
-      let step5 = defaultSteps[4];
-
-      // Request /step/1
       try {
-        const data = await getStep(1);
-        console.log('Step 1:', data.message);
+        const steps = await Promise.all(
+          [1, 2, 3, 4, 5].map((id) => getStep(id, controller.signal))
+        );
 
-        if (
-          typeof data.message === 'string' &&
-          data.message.trim() !== '' &&
-          data.message !== 'There are no more steps'
-        ) {
-          step1 = {
-            id: 1,
-            title: 'Step 1',
-            description: data.message
-          };
+        if (!controller.signal.aborted) {
+          setStepsData(steps);
         }
       } catch (error) {
-        console.error('Error fetching step 1:', error);
-      }
-
-      // Request /step/2
-      try {
-        const data = await getStep(2);
-        console.log('Step 2:', data.message);
-
-        if (
-          typeof data.message === 'string' &&
-          data.message.trim() !== '' &&
-          data.message !== 'There are no more steps'
-        ) {
-          step2 = {
-            id: 2,
-            title: 'Step 2',
-            description: data.message
-          };
+        if (!controller.signal.aborted) {
+          console.error('Error fetching mission steps:', error);
+          setError('Unable to load mission steps. Please try again.');
         }
-      } catch (error) {
-        console.error('Error fetching step 2:', error);
-      }
-
-      // Request /step/3
-      try {
-        const data = await getStep(3);
-        console.log('Step 3:', data.message);
-
-        if (
-          typeof data.message === 'string' &&
-          data.message.trim() !== '' &&
-          data.message !== 'There are no more steps'
-        ) {
-          step3 = {
-            id: 3,
-            title: 'Step 3',
-            description: data.message
-          };
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
         }
-      } catch (error) {
-        console.error('Error fetching step 3:', error);
-      }
-
-      // Request /step/4
-      try {
-        const data = await getStep(4);
-        console.log('Step 4:', data.message);
-
-        if (
-          typeof data.message === 'string' &&
-          data.message.trim() !== '' &&
-          data.message !== 'There are no more steps'
-        ) {
-          step4 = {
-            id: 4,
-            title: 'Step 4',
-            description: data.message
-          };
-        }
-      } catch (error) {
-        console.error('Error fetching step 4:', error);
-      }
-
-      // Request /step/5
-      try {
-        const data = await getStep(5);
-        console.log('Step 5:', data.message);
-
-        if (
-          typeof data.message === 'string' &&
-          data.message.trim() !== '' &&
-          data.message !== 'There are no more steps'
-        ) {
-          step5 = {
-            id: 5,
-            title: 'Step 5',
-            description: data.message
-          };
-        }
-      } catch (error) {
-        console.error('Error fetching step 5:', error);
-      }
-
-      if (!cancelled) {
-        setStepsData([
-          step1,
-          step2,
-          step3,
-          step4,
-          step5
-        ]);
-
-        setLoading(false);
       }
     }
 
     fetchAllSteps();
 
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return () => controller.abort();
+  }, [retryCount]);
 
   const playCustomSound = () => {
     if (audioRef.current) {
@@ -241,6 +124,20 @@ export default function Mission({ setCurrentPage }) {
     return (
       <div className="min-h-screen bg-[#071317] flex items-center justify-center text-white font-black text-xl">
         Loading Mission Data...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-[#071317] flex flex-col items-center justify-center gap-6 px-6 text-center text-white">
+        <p role="alert" className="font-black text-xl">{error}</p>
+        <button
+          onClick={() => setRetryCount((count) => count + 1)}
+          className="px-6 py-3 bg-[#ff5500] hover:bg-[#e04b00] rounded-2xl font-bold"
+        >
+          Try again
+        </button>
       </div>
     );
   }
