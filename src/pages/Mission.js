@@ -2,11 +2,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import boxAImg from '../assets/boxA.png';
 import boxBImg from '../assets/boxB.png';
-
-// Import custom click sound effect file
 import clickSoundFile from '../assets/click-box.mp3';
 
 const API_BASE_URL = 'http://localhost:3000';
+
+// Fetch a step by ID
+async function getStep(id) {
+  const response = await fetch(
+    `${API_BASE_URL}/step/${encodeURIComponent(id)}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.status}`);
+  }
+
+  return response.json();
+}
 
 export default function Mission({ setCurrentPage }) {
   const [expandedSteps, setExpandedSteps] = useState([]);
@@ -17,21 +28,10 @@ export default function Mission({ setCurrentPage }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Initialize audio reference for box click effects
+  // Audio reference
   const audioRef = useRef(null);
 
-  useEffect(() => {
-    audioRef.current = new Audio(clickSoundFile);
-
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-    };
-  }, []);
-
-  // Default fallback steps (If backend is offline or empty)
+  // Default fallback steps
   const defaultSteps = [
     {
       id: 1,
@@ -60,81 +60,144 @@ export default function Mission({ setCurrentPage }) {
     }
   ];
 
-  // -------------------------------------------------------------
-  // API Call: GET /step/:id
-  // Backend response: { message: data.step }
-  // -------------------------------------------------------------
+  // Initialize audio
+  useEffect(() => {
+    audioRef.current = new Audio(clickSoundFile);
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
+  // Fetch each step separately using getStep()
   useEffect(() => {
     let cancelled = false;
 
-    const fetchAllSteps = async () => {
+    async function fetchAllSteps() {
       setLoading(true);
       setError(null);
 
+      let step1 = defaultSteps[0];
+      let step2 = defaultSteps[1];
+      let step3 = defaultSteps[2];
+      let step4 = defaultSteps[3];
+      let step5 = defaultSteps[4];
+
+      // Request /step/1
       try {
-        // Fetch each step separately: /step/1, /step/2, etc.
-        const results = await Promise.all(
-          defaultSteps.map(async (defaultStep) => {
-            try {
-              const response = await fetch(
-                `${API_BASE_URL}/step/${defaultStep.id}`
-              );
+        const data = await getStep(1);
+        console.log('Step 1:', data.message);
 
-              if (!response.ok) {
-                throw new Error(
-                  `Step ${defaultStep.id}: HTTP ${response.status}`
-                );
-              }
-
-              const result = await response.json();
-
-              // The backend returns { message: data.step }.
-              const description =
-                typeof result.message === 'string'
-                  ? result.message
-                  : defaultStep.description;
-
-              // Keep fallback text if the backend says no step exists.
-              if (
-                !description ||
-                description === 'There are no more steps'
-              ) {
-                return defaultStep;
-              }
-
-              return {
-                id: defaultStep.id,
-                title: `Step ${defaultStep.id}`,
-                description
-              };
-            } catch (err) {
-              console.error(
-                `Failed to fetch step ${defaultStep.id}:`,
-                err
-              );
-
-              // Use the matching fallback step if this request fails.
-              return defaultStep;
-            }
-          })
-        );
-
-        if (!cancelled) {
-          setStepsData(results);
+        if (
+          typeof data.message === 'string' &&
+          data.message.trim() !== '' &&
+          data.message !== 'There are no more steps'
+        ) {
+          step1 = {
+            id: 1,
+            title: 'Step 1',
+            description: data.message
+          };
         }
-      } catch (err) {
-        console.error('API Fetch Error:', err);
-
-        if (!cancelled) {
-          setStepsData(defaultSteps);
-          setError('Could not connect to the backend. Showing default steps.');
-        }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+      } catch (error) {
+        console.error('Error fetching step 1:', error);
       }
-    };
+
+      // Request /step/2
+      try {
+        const data = await getStep(2);
+        console.log('Step 2:', data.message);
+
+        if (
+          typeof data.message === 'string' &&
+          data.message.trim() !== '' &&
+          data.message !== 'There are no more steps'
+        ) {
+          step2 = {
+            id: 2,
+            title: 'Step 2',
+            description: data.message
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching step 2:', error);
+      }
+
+      // Request /step/3
+      try {
+        const data = await getStep(3);
+        console.log('Step 3:', data.message);
+
+        if (
+          typeof data.message === 'string' &&
+          data.message.trim() !== '' &&
+          data.message !== 'There are no more steps'
+        ) {
+          step3 = {
+            id: 3,
+            title: 'Step 3',
+            description: data.message
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching step 3:', error);
+      }
+
+      // Request /step/4
+      try {
+        const data = await getStep(4);
+        console.log('Step 4:', data.message);
+
+        if (
+          typeof data.message === 'string' &&
+          data.message.trim() !== '' &&
+          data.message !== 'There are no more steps'
+        ) {
+          step4 = {
+            id: 4,
+            title: 'Step 4',
+            description: data.message
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching step 4:', error);
+      }
+
+      // Request /step/5
+      try {
+        const data = await getStep(5);
+        console.log('Step 5:', data.message);
+
+        if (
+          typeof data.message === 'string' &&
+          data.message.trim() !== '' &&
+          data.message !== 'There are no more steps'
+        ) {
+          step5 = {
+            id: 5,
+            title: 'Step 5',
+            description: data.message
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching step 5:', error);
+      }
+
+      if (!cancelled) {
+        setStepsData([
+          step1,
+          step2,
+          step3,
+          step4,
+          step5
+        ]);
+
+        setLoading(false);
+      }
+    }
 
     fetchAllSteps();
 
@@ -158,7 +221,7 @@ export default function Mission({ setCurrentPage }) {
 
     setTimeout(() => {
       setShakingId(null);
-    }, 400); // 400ms shake duration
+    }, 400);
   };
 
   const handleStepClick = (id) => {
@@ -184,7 +247,7 @@ export default function Mission({ setCurrentPage }) {
 
   return (
     <div className="w-full">
-      {/* Custom shake animation keyframes stylesheet */}
+      {/* Custom shake animation */}
       <style>{`
         @keyframes customShake {
           0% { transform: translate(0, 0) rotate(0deg); }
@@ -216,9 +279,11 @@ export default function Mission({ setCurrentPage }) {
                 className="w-full h-full object-contain filter drop-shadow-[0_15px_25px_rgba(0,0,0,0.6)] hover:brightness-110"
               />
             </div>
+
             <h3 className="text-3xl font-black tracking-wider text-white mb-2">
               BOX A
             </h3>
+
             <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
               Contains the first set of network components and endpoint devices.
             </p>
@@ -238,9 +303,11 @@ export default function Mission({ setCurrentPage }) {
                 className="w-full h-full object-contain filter drop-shadow-[0_15px_25px_rgba(0,0,0,0.6)] hover:brightness-110"
               />
             </div>
+
             <h3 className="text-3xl font-black tracking-wider text-white mb-2">
               BOX B
             </h3>
+
             <p className="text-gray-400 text-sm max-w-xs leading-relaxed">
               Contains essential cables and connection equipment.
             </p>
@@ -292,7 +359,7 @@ export default function Mission({ setCurrentPage }) {
           })}
         </div>
 
-        {/* Navigation button to the game page */}
+        {/* Navigation button */}
         <button
           onClick={() => {
             setCurrentPage('game');
