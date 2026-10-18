@@ -4,6 +4,8 @@ This project was bootstrapped with [Create React App](https://github.com/faceboo
 
 ## Available Scripts
 
+Create `.env.development` with `PORT=3001` before starting the app. This local configuration file is ignored by Git.
+
 In the project directory, you can run:
 
 ### `npm start`

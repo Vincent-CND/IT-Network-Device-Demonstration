@@ -19,6 +19,8 @@ frontend/
 
 ## Run the frontend
 
+Create `frontend/.env.development` with `PORT=3001` before starting the app. This local configuration file is ignored by Git.
+
 ```bash
 cd frontend
 npm ci
