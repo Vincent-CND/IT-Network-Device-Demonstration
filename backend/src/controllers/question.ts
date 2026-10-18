@@ -1,32 +1,35 @@
 import { Response,Request } from "express";
 import prisma from "../prisma/prisma";
 
-interface data {
+interface question {
     id: number,
     question: string,
-    type: string
+    type: string,
+    hint: string
 }
 
-export const fetchQuestion  = async (req: Request,res: Response): Promise<void> => {
+
+export const questionFetch  = async (req: Request,res: Response): Promise<void> => {
     const {id} = req.params
 
-    const queryQuestion = Number(id)
+    const convertId = Number(id)
 
     try {
-        const fetchData: data | null = await prisma.question.findFirst({
-            where: {id: queryQuestion},
+        const fetchQuestion: question | null = await prisma.question.findFirst({
+            where: {id: convertId},
             select: {
                 id: true,
                 question: true,
-                type: true
+                type: true,
+                hint: true
             }
         })
 
-        if (fetchData) { 
-            res.status(200).json({data: fetchData})
+        if (fetchQuestion) { 
+            res.status(200).json({data: fetchQuestion})
         } 
 
-        if (!fetchData || fetchData === null) { 
+        if (!fetchQuestion || fetchQuestion === null) { 
             console.log("Doen't have any data from db")
             res.json({message: "Invalid question request"})
         } 
@@ -36,3 +39,4 @@ export const fetchQuestion  = async (req: Request,res: Response): Promise<void> 
         res.status(500).json({message: "Error from server"})
     }
 }
+
