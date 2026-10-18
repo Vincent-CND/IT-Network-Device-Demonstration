@@ -1,70 +1,54 @@
-# Getting Started with Create React App
+# Innovation Project
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+The `fullstack` branch combines the React application in `frontend/` and the Express/Prisma backend in `backend/`.
 
-## Available Scripts
+```text
+frontend/
+  public/              Static assets and HTML template
+  src/
+    assets/            Images and audio
+    components/        Shared UI components
+    pages/             Application pages and page tests
+    App.js             Application entry component
+    index.js           React entry point
+  package.json         Dependencies and npm scripts
+  package-lock.json    Locked dependency versions
+  postcss.config.js    PostCSS configuration
+  tailwind.config.js   Tailwind configuration
+```
 
-In the project directory, you can run:
+## Run the frontend
 
-### `npm start`
+Create `frontend/.env.development` with `PORT=3001` before starting the app. This local configuration file is ignored by Git.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+```bash
+cd frontend
+npm ci
+npm start
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+The frontend runs at `http://localhost:3001`, configured in `frontend/.env.development`. The mission and game pages call the backend at `http://localhost:3000`.
 
-### `npm test`
+## Run the backend
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+Create `backend/.env` with `PORT=3000` and a `DATABASE_URL` pointing to your PostgreSQL database. This local configuration file is ignored by Git. The database must have the project's schema and mission/question data.
 
-### `npm run build`
+In a separate terminal:
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+cd backend
+npm ci
+npm run build
+npm run dev
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## Validate the frontend
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+From the repository root:
 
-### `npm run eject`
+```bash
+npm --prefix frontend run build
+CI=true npm --prefix frontend test -- --watchAll=false --runInBand --runTestsByPath src/pages/Mission.test.js
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+Generated directories such as `node_modules/`, `build/`, and `dist/` are ignored by Git and can remain on disk when switching branches.
