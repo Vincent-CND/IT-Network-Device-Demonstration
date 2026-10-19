@@ -94,34 +94,26 @@ export default function Game({ setCurrentPage }) {
     try {
       const response = await fetch(`${API_BASE_URL}/question/${encodeURIComponent(id)}`);
       if (!response.ok) throw new Error(`API Error: ${response.status}`);
-      const data = await response.json();
+      const jsonResponse = await response.json();
 
-      // Handling multiple backend response structures safely
-      const qText = data?.question || data?.message || data?.text || data?.data?.question || 'Question content loaded.';
-      const hText = data?.hint || data?.data?.hint || 'Think about the components in the box.';
+      const itemData = jsonResponse?.data || jsonResponse;
+      const qText = itemData?.question || itemData?.message || itemData?.text || 'Question content loaded.';
+      const hText = itemData?.hint || 'Think about the components in the box.';
+      const tText = itemData?.type || 'Standard';
 
       setLoadedQuestions((prev) => ({
         ...prev,
         [id]: {
           question: qText,
-          hint: hText
+          hint: hText,
+          type: tText
         }
       }));
     } catch (err) {
       console.error(err);
-      // Fallback data if API fails so button click works visually
-      const fallbacks = {
-        1: "Find the most important cable in the second box",
-        2: "Find the raspberry pi aka endpoint in the first box",
-        3: "Find the bridge aka called switch",
-        4: "Find the boat aka called router"
-      };
-      setLoadedQuestions((prev) => ({
+      setMessages((prev) => ({
         ...prev,
-        [id]: {
-          question: fallbacks[id] || 'Default Question',
-          hint: 'Check your backend server endpoint.'
-        }
+        [id]: { text: 'Failed to load question from server. Please check backend.', type: 'error' }
       }));
     } finally {
       setFetchingId(null);
@@ -135,8 +127,9 @@ export default function Game({ setCurrentPage }) {
     try {
       const response = await fetch(`${API_BASE_URL}/get/hint/${encodeURIComponent(id)}`);
       if (response.ok) {
-        const data = await response.json();
-        setCurrentHintText(data?.hint || data?.message || loaded?.hint || 'No hint available.');
+        const jsonResponse = await response.json();
+        const hintData = jsonResponse?.data || jsonResponse;
+        setCurrentHintText(hintData?.hint || hintData?.message || loaded?.hint || 'No hint available.');
       } else {
         setCurrentHintText(loaded?.hint || 'No hint available.');
       }
@@ -239,7 +232,7 @@ export default function Game({ setCurrentPage }) {
               }`}
             >
               {!isLoaded ? (
-                <div className="flex justify-center items-center py-10">
+                <div className="flex flex-col justify-center items-center py-10 space-y-3">
                   <button
                     disabled={!isUnlocked || fetchingId === id}
                     onClick={() => handleStartQuestion(id)}
@@ -251,9 +244,21 @@ export default function Game({ setCurrentPage }) {
                   >
                     {fetchingId === id ? 'Loading...' : `Question ${id}`}
                   </button>
+                  {message && message.type === 'error' && (
+                    <p className="text-red-400 text-xs font-bold">{message.text}</p>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
+                  <div className="flex justify-between items-center border-b border-gray-800 pb-2 mb-2">
+                    <span className="text-[#72c02c] font-black text-xs tracking-wider">
+                      QUESTION 0{id}
+                    </span>
+                    <span className="bg-[#ffb703]/20 text-[#ffb703] border border-[#ffb703]/50 px-3 py-0.5 rounded-full text-xs font-bold uppercase">
+                      {loadedQuestions[id]?.type}
+                    </span>
+                  </div>
+
                   <div className="grid md:grid-cols-2 gap-6 items-center">
                     <p className="text-gray-200 text-base md:text-lg leading-relaxed font-sans font-medium">
                       {loadedQuestions[id]?.question}
