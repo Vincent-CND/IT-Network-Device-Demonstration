@@ -1,20 +1,16 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import HintModal from '../components/HintModal';
 import CongratsModal from '../components/CongratsModal';
 import logoImg from '../assets/game-logo.png';
 
-// API base URL
 const API_BASE_URL = 'http://localhost:3000';
 
-// Matrix digital rain background canvas component
 function MatrixBackground() {
   const canvasRef = useRef(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -33,59 +29,29 @@ function MatrixBackground() {
 
     const characters = '01';
     const fontSize = 16;
-
     let columns = Math.floor(canvas.width / fontSize);
-    let drops = Array.from(
-      { length: columns },
-      () => Math.floor(Math.random() * -100)
-    );
-
-    const updateColumns = () => {
-      columns = Math.floor(canvas.width / fontSize);
-      drops = Array.from(
-        { length: columns },
-        () => Math.floor(Math.random() * -100)
-      );
-    };
-
-    const handleResize = () => {
-      resizeCanvas();
-      updateColumns();
-    };
-
-    window.removeEventListener('resize', resizeCanvas);
-    window.addEventListener('resize', handleResize);
+    let drops = Array.from({ length: columns }, () => Math.floor(Math.random() * -100));
 
     const draw = (currentTime) => {
       animationFrameId = requestAnimationFrame(draw);
-
       const deltaTime = currentTime - lastTime;
       if (deltaTime < interval) return;
 
       lastTime = currentTime - (deltaTime % interval);
-
       ctx.fillStyle = 'rgba(4, 12, 14, 0.35)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
       ctx.font = `${fontSize}px "Fredoka", monospace`;
 
       for (let i = 0; i < drops.length; i++) {
-        const text = characters.charAt(
-          Math.floor(Math.random() * characters.length)
-        );
-
+        const text = characters.charAt(Math.floor(Math.random() * characters.length));
         ctx.fillStyle = '#1c5d26';
-        ctx.shadowBlur = 0;
-
         const x = i * fontSize;
         const y = drops[i] * fontSize;
-
         ctx.fillText(text, x, y);
 
         if (y > canvas.height && Math.random() > 0.98) {
           drops[i] = 0;
         }
-
         drops[i]++;
       }
     };
@@ -93,7 +59,7 @@ function MatrixBackground() {
     animationFrameId = requestAnimationFrame(draw);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('resize', resizeCanvas);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
@@ -106,348 +72,146 @@ function MatrixBackground() {
   );
 }
 
-// GET /step/:id
-async function getStep(id) {
-  const response = await fetch(
-    `${API_BASE_URL}/step/${encodeURIComponent(id)}`
-  );
-
-  if (!response.ok) {
-    throw new Error(`Step API error: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-// GET /question/:id
-async function getQuestion(id) {
-  const response = await fetch(
-    `${API_BASE_URL}/question/${encodeURIComponent(id)}`
-  );
-
-  if (!response.ok) {
-    throw new Error(`Question ${id} API error: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-// GET /get/hint/:id
-async function getHint(id) {
-  const response = await fetch(
-    `${API_BASE_URL}/get/hint/${encodeURIComponent(id)}`
-  );
-
-  if (!response.ok) {
-    throw new Error(`Hint ${id} API error: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-// Support common backend response formats
-function extractQuestion(data, id, fallback) {
-  const result = data?.message ?? data?.question ?? data?.data ?? data;
-
-  if (typeof result === 'string') {
-    return {
-      id,
-      question: result,
-      hint: fallback?.hint ?? '',
-    };
-  }
-
-  return {
-    id,
-    question:
-      result?.question ??
-      result?.text ??
-      result?.title ??
-      result?.message ??
-      fallback?.question ??
-      '',
-    hint: result?.hint ?? fallback?.hint ?? '',
-  };
-}
-
-function extractHint(data, fallbackHint) {
-  const result = data?.message ?? data?.hint ?? data?.data ?? data;
-
-  if (typeof result === 'string') return result;
-
-  return (
-    result?.hint ??
-    result?.text ??
-    result?.message ??
-    fallbackHint ??
-    'Hint is not available.'
-  );
-}
-
 export default function Game({ setCurrentPage }) {
-  const [activeStep, setActiveStep] = useState(0);
-  const [answers, setAnswers] = useState([]);
+  const [unlockedStep, setUnlockedStep] = useState(1);
+  const [loadedQuestions, setLoadedQuestions] = useState({});
+  const [userAnswers, setUserAnswers] = useState({});
+  const [messages, setMessages] = useState({});
+  const [fetchingId, setFetchingId] = useState(null);
+  const [checkingId, setCheckingId] = useState(null);
+
   const [currentHintText, setCurrentHintText] = useState(null);
   const [showCongrats, setShowCongrats] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  // API Data States
-  const [questionsData, setQuestionsData] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const totalQuestions = 4;
 
-  // Store step API responses without changing the UI
-  const [stepsData, setStepsData] = useState({});
+  const handleStartQuestion = async (id) => {
+    if (id > unlockedStep) return;
+    if (loadedQuestions[id]) return;
 
-  // Prevent multiple submissions
-  const [submitting, setSubmitting] = useState(false);
+    setFetchingId(id);
+    try {
+      const response = await fetch(`${API_BASE_URL}/question/${encodeURIComponent(id)}`);
+      if (!response.ok) throw new Error(`API Error: ${response.status}`);
+      const data = await response.json();
 
-  // References to track question card positions for smooth robot movement
-  const cardRefs = useRef([]);
+      // Handling multiple backend response structures safely
+      const qText = data?.question || data?.message || data?.text || data?.data?.question || 'Question content loaded.';
+      const hText = data?.hint || data?.data?.hint || 'Think about the components in the box.';
 
-  // Dynamic top offset for robot companion
-  const [robotTop, setRobotTop] = useState(0);
-
-  // Fallback questions data in case the backend server is offline
-  const defaultQuestions = [
-    {
-      id: 1,
-      question: 'Find the most important cable in the second box',
-      hint: 'Appearance of devices',
-    },
-    {
-      id: 2,
-      question: 'Find the raspberry pi aka endpoint in the first box',
-      hint: 'Think about it. It looks like your computer',
-    },
-    {
-      id: 3,
-      question: 'Find the bridge aka called switch',
-      hint: 'Imagine it is relevant to a real bridge, which is visited by many people',
-    },
-    {
-      id: 4,
-      question: 'Find the boat aka called router',
-      hint: 'It will be the last device, but it serves as the boat to transport the goods to another world',
-    },
-  ];
-
-  // -------------------------------------------------------------
-  // API Calls:
-  // GET /step/1, /step/2, etc.
-  // GET /question/1, /question/2, etc.
-  // -------------------------------------------------------------
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchAllQuestions = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        // Fetch steps independently.
-        // A missing step endpoint must not block question loading.
-        const stepResults = await Promise.allSettled(
-          [1, 2, 3, 4, 5].map((id) => getStep(id))
-        );
-
-        const loadedSteps = {};
-
-        stepResults.forEach((result, index) => {
-          if (result.status === 'fulfilled') {
-            loadedSteps[index + 1] = result.value;
-          } else {
-            console.warn(
-              `Could not load step ${index + 1}:`,
-              result.reason
-            );
-          }
-        });
-
-        // Load question IDs one by one.
-        // Try five IDs so a fifth backend question can be included.
-        const questionResults = await Promise.allSettled(
-          [1, 2, 3, 4, 5].map((id) => getQuestion(id))
-        );
-
-        const fetchedQuestions = [];
-
-        questionResults.forEach((result, index) => {
-          const id = index + 1;
-          const fallback = defaultQuestions.find(
-            (question) => question.id === id
-          );
-
-          if (result.status === 'fulfilled') {
-            const question = extractQuestion(
-              result.value,
-              id,
-              fallback
-            );
-
-            // Ignore empty question responses instead of adding
-            // blank cards to the game.
-            if (question.question) {
-              fetchedQuestions.push(question);
-            } else if (fallback) {
-              fetchedQuestions.push(fallback);
-            }
-          } else {
-            console.warn(
-              `Could not load question ${id}:`,
-              result.reason
-            );
-
-            if (fallback) {
-              fetchedQuestions.push(fallback);
-            }
-          }
-        });
-
-        if (cancelled) return;
-
-        // If the API returned no usable questions, use all defaults.
-        const finalQuestions =
-          fetchedQuestions.length > 0
-            ? fetchedQuestions
-            : defaultQuestions;
-
-        setStepsData(loadedSteps);
-        setQuestionsData(finalQuestions);
-        setAnswers(new Array(finalQuestions.length).fill(''));
-      } catch (err) {
-        console.error('API Fetch Error:', err);
-
-        if (!cancelled) {
-          setQuestionsData(defaultQuestions);
-          setAnswers(new Array(defaultQuestions.length).fill(''));
-          setError('Using fallback questions because the API is unavailable.');
+      setLoadedQuestions((prev) => ({
+        ...prev,
+        [id]: {
+          question: qText,
+          hint: hText
         }
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
+      }));
+    } catch (err) {
+      console.error(err);
+      // Fallback data if API fails so button click works visually
+      const fallbacks = {
+        1: "Find the most important cable in the second box",
+        2: "Find the raspberry pi aka endpoint in the first box",
+        3: "Find the bridge aka called switch",
+        4: "Find the boat aka called router"
+      };
+      setLoadedQuestions((prev) => ({
+        ...prev,
+        [id]: {
+          question: fallbacks[id] || 'Default Question',
+          hint: 'Check your backend server endpoint.'
         }
-      }
-    };
+      }));
+    } finally {
+      setFetchingId(null);
+    }
+  };
 
-    fetchAllQuestions();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Calculate dynamic top offset for the robot companion
-  useEffect(() => {
-    const updateRobotPosition = () => {
-      const cardElement = cardRefs.current[activeStep];
-
-      if (cardElement) {
-        setRobotTop(cardElement.offsetTop);
-      }
-    };
-
-    updateRobotPosition();
-
-    window.addEventListener('resize', updateRobotPosition);
-
-    return () => {
-      window.removeEventListener('resize', updateRobotPosition);
-    };
-  }, [activeStep, questionsData]);
-
-  // -------------------------------------------------------------
-  // API Call: Load hint when Hint is clicked
-  // GET /get/hint/:id
-  // -------------------------------------------------------------
-  const handleShowHint = async (index) => {
-    const question = questionsData[index];
-
-    if (!question) return;
-
-    // Show fallback immediately while the API request is running
-    setCurrentHintText(question.hint || 'Loading hint...');
+  const handleShowHint = async (id) => {
+    const loaded = loadedQuestions[id];
+    setCurrentHintText('Loading hint...');
 
     try {
-      const result = await getHint(question.id);
-      setCurrentHintText(
-        extractHint(result, question.hint)
-      );
-    } catch (err) {
-      console.error('API Hint Error:', err);
-
-      // Keep the fallback hint if the endpoint is unavailable
-      setCurrentHintText(
-        question.hint || 'Hint is not available right now.'
-      );
-    }
-  };
-
-  const handleDone = (index) => {
-    if (answers[index] && answers[index].trim() !== '') {
-      if (index === activeStep && activeStep < questionsData.length - 1) {
-        setActiveStep(activeStep + 1);
-      } else if (index === questionsData.length - 1) {
-        setIsCompleted(true);
+      const response = await fetch(`${API_BASE_URL}/get/hint/${encodeURIComponent(id)}`);
+      if (response.ok) {
+        const data = await response.json();
+        setCurrentHintText(data?.hint || data?.message || loaded?.hint || 'No hint available.');
+      } else {
+        setCurrentHintText(loaded?.hint || 'No hint available.');
       }
+    } catch (err) {
+      setCurrentHintText(loaded?.hint || 'No hint available.');
     }
   };
 
-  // -------------------------------------------------------------
-  // API Call: Submit Answers to Backend (/answer)
-  // -------------------------------------------------------------
-  const handleSubmit = async () => {
-    if (
-      submitting ||
-      !isCompleted ||
-      !answers.every((answer) => answer.trim() !== '')
-    ) {
+  const handleDone = async (id) => {
+    const answer = userAnswers[id]?.trim();
+    if (!answer) {
+      setMessages((prev) => ({
+        ...prev,
+        [id]: { text: 'Hey dude, enter an answer first!', type: 'error' }
+      }));
       return;
     }
 
-    setSubmitting(true);
-
+    setCheckingId(id);
     try {
       const response = await fetch(`${API_BASE_URL}/answer`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ answers }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ questionId: id, answer: answer }),
       });
 
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
+      const data = await response.json().catch(() => ({}));
 
-      const result = await response.json();
+      if (response.ok && (data.success || data.status === 'correct' || data.message === 'Correct')) {
+        setMessages((prev) => ({
+          ...prev,
+          [id]: { text: 'Awesome! Correct Answer! 🎉', type: 'success' }
+        }));
 
-      if (result.success || result.message) {
-        setShowCongrats(true);
+        if (id === unlockedStep) {
+          const nextStep = id + 1;
+          setUnlockedStep(nextStep);
+          if (nextStep > totalQuestions) {
+            setIsCompleted(true);
+          }
+        }
       } else {
-        alert('Submission failed. Please try again.');
+        const wrongMessages = [
+          "Hey dude, try again! ❌",
+          "Oops! Wrong answer, try once more!",
+          "Not quite right! Keep thinking!"
+        ];
+        const randomMsg = wrongMessages[Math.floor(Math.random() * wrongMessages.length)];
+        
+        setMessages((prev) => ({
+          ...prev,
+          [id]: { text: data.message || randomMsg, type: 'error' }
+        }));
       }
     } catch (err) {
-      console.error('API Submit Error:', err);
-      alert('Error connecting to backend server.');
+      console.error(err);
+      setMessages((prev) => ({
+        ...prev,
+        [id]: { text: 'Connection error while checking answer.', type: 'error' }
+      }));
     } finally {
-      setSubmitting(false);
+      setCheckingId(null);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#040c0e] flex items-center justify-center text-white font-black text-xl">
-        Loading Cyber Quest Data...
-      </div>
-    );
-  }
+  const handleSubmitAll = () => {
+    if (isCompleted || unlockedStep > totalQuestions) {
+      setShowCongrats(true);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#040c0e] py-12 px-6 flex flex-col items-center justify-center relative overflow-hidden">
       <MatrixBackground />
 
-      {/* Cyber Quest Header Logo */}
       <div className="flex flex-col items-center justify-center mb-8 relative z-10">
         <div className="w-16 h-16 flex items-center justify-center mb-1">
           <img
@@ -461,135 +225,102 @@ export default function Game({ setCurrentPage }) {
         </span>
       </div>
 
-      {/* Main layout container */}
-      <div className="w-full max-w-5xl relative z-10 lg:pl-40">
+      <div className="w-full max-w-4xl space-y-4 relative z-10">
+        {[1, 2, 3, 4].map((id) => {
+          const isUnlocked = id <= unlockedStep;
+          const isLoaded = !!loadedQuestions[id];
+          const message = messages[id];
 
-        {/* Moving robot companion on the left side */}
-        <div
-          className="hidden lg:flex flex-col items-center p-4 bg-[#061215]/95 border-2 border-[#72c02c] rounded-3xl shadow-[0_0_25px_rgba(114,192,44,0.3)] backdrop-blur-md absolute left-0 w-32 transition-all duration-500 ease-in-out z-20"
-          style={{ top: `${robotTop}px` }}
-        >
-          <style>{`
-            @keyframes floatAnim {
-              0%, 100% { transform: translateY(0px) rotate(0deg); }
-              50% { transform: translateY(-6px) rotate(1deg); }
-            }
-            .animate-float {
-              animation: floatAnim 3s ease-in-out infinite;
-            }
-          `}</style>
+          return (
+            <div
+              key={id}
+              className={`bg-[#061215]/95 backdrop-blur-md border-2 transition-all duration-300 p-6 rounded-none ${
+                isUnlocked ? 'border-[#72c02c]/50' : 'border-gray-800 opacity-40'
+              }`}
+            >
+              {!isLoaded ? (
+                <div className="flex justify-center items-center py-10">
+                  <button
+                    disabled={!isUnlocked || fetchingId === id}
+                    onClick={() => handleStartQuestion(id)}
+                    className={`px-12 py-3.5 rounded-2xl font-black text-base shadow-lg transition cursor-pointer ${
+                      isUnlocked
+                        ? 'bg-[#ff5500] hover:bg-[#e04b00] text-white shadow-[0_0_15px_rgba(255,85,0,0.4)]'
+                        : 'bg-[#2a2a2a] text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {fetchingId === id ? 'Loading...' : `Question ${id}`}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid md:grid-cols-2 gap-6 items-center">
+                    <p className="text-gray-200 text-base md:text-lg leading-relaxed font-sans font-medium">
+                      {loadedQuestions[id]?.question}
+                    </p>
 
-          <div className="relative w-20 h-20 bg-[#0b1b20] border-2 border-[#72c02c] rounded-2xl flex flex-col items-center justify-center shadow-inner animate-float mb-2">
-            <div className="absolute -top-2 w-3 h-1.5 bg-[#72c02c] rounded-full animate-ping" />
-            <div className="flex space-x-2 mb-1.5">
-              <div className="w-2.5 h-2.5 bg-[#72c02c] rounded-full shadow-[0_0_6px_#72c02c]" />
-              <div className="w-2.5 h-2.5 bg-[#72c02c] rounded-full shadow-[0_0_6px_#72c02c]" />
-            </div>
-            <span className="text-[#ff5500] font-black text-[10px] tracking-widest">
-              BOT-X
-            </span>
-            <div className="w-8 h-1 bg-[#72c02c] mt-1 rounded-full shadow-[0_0_4px_rgba(114,192,44,0.8)]" />
-          </div>
+                    <div className="flex flex-col space-y-3">
+                      <input
+                        type="text"
+                        value={userAnswers[id] || ''}
+                        onChange={(e) =>
+                          setUserAnswers({ ...userAnswers, [id]: e.target.value })
+                        }
+                        placeholder="Enter answer..."
+                        className="w-full bg-white text-black px-4 py-2.5 rounded-xl font-medium outline-none text-sm shadow-inner placeholder:text-gray-400"
+                      />
 
-          <div className="text-center">
-            <span className="text-[#72c02c] font-black text-xs tracking-widest">
-              Q0{activeStep + 1}
-            </span>
-          </div>
-        </div>
+                      <div className="flex space-x-3">
+                        <button
+                          onClick={() => handleShowHint(id)}
+                          className="w-1/3 bg-[#ffb703] hover:bg-[#ffa200] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer"
+                        >
+                          Hint
+                        </button>
 
-        {/* Mobile responsive robot position indicator */}
-        <div className="lg:hidden flex items-center justify-center mb-6 bg-[#061215]/95 border-2 border-[#72c02c] p-3 rounded-2xl shadow-[0_0_15px_rgba(114,192,44,0.3)]">
-          <span className="text-white text-xs font-bold mr-2">
-            🤖 BOT-X is at:
-          </span>
-          <span className="text-[#72c02c] font-black text-sm">
-            Question 0{activeStep + 1}
-          </span>
-        </div>
-
-        {/* Questions card list */}
-        <div className="space-y-4 w-full">
-          {questionsData.map((item, index) => {
-            const isUnlocked = index <= activeStep;
-            const isCurrentActive = index === activeStep && !isCompleted;
-
-            return (
-              <div
-                key={item.id || index}
-                ref={(el) => (cardRefs.current[index] = el)}
-                className={`bg-[#061215]/95 backdrop-blur-md border-2 transition-all duration-300 p-6 rounded-none ${
-                  isCurrentActive
-                    ? 'border-[#ff5500] shadow-[0_0_25px_rgba(255,85,0,0.3)] scale-[1.01]'
-                    : isUnlocked
-                      ? 'border-[#72c02c]/60 shadow-[0_0_15px_rgba(114,192,44,0.1)]'
-                      : 'border-emerald-950/40 opacity-20 filter blur-[1px]'
-                }`}
-              >
-                <div className="grid md:grid-cols-2 gap-6 items-center">
-                  <p className="text-gray-200 text-base md:text-lg leading-relaxed font-sans font-medium">
-                    {item.question}
-                  </p>
-
-                  <div className="flex flex-col space-y-3">
-                    <input
-                      type="text"
-                      disabled={!isUnlocked}
-                      value={answers[index] || ''}
-                      onChange={(e) => {
-                        const newAns = [...answers];
-                        newAns[index] = e.target.value;
-                        setAnswers(newAns);
-                      }}
-                      placeholder="Enter answer..."
-                      className="w-full bg-white text-black px-4 py-2.5 rounded-xl font-medium outline-none text-sm shadow-inner placeholder:text-gray-400"
-                    />
-
-                    <div className="flex space-x-3">
-                      <button
-                        disabled={!isUnlocked}
-                        onClick={() => handleShowHint(index)}
-                        className="w-1/3 bg-[#ffb703] hover:bg-[#ffa200] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
-                      >
-                        Hint
-                      </button>
-
-                      <button
-                        disabled={!isUnlocked}
-                        onClick={() => handleDone(index)}
-                        className="w-2/3 bg-[#ff5500] hover:bg-[#e04b00] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
-                      >
-                        Done
-                      </button>
+                        <button
+                          onClick={() => handleDone(id)}
+                          disabled={checkingId === id}
+                          className="w-2/3 bg-[#ff5500] hover:bg-[#e04b00] text-white font-black py-2.5 rounded-xl text-sm shadow transition cursor-pointer disabled:opacity-50"
+                        >
+                          {checkingId === id ? 'Checking...' : 'Done'}
+                        </button>
+                      </div>
                     </div>
                   </div>
+
+                  {message && (
+                    <div
+                      className={`text-center py-2 px-4 rounded-xl text-sm font-bold ${
+                        message.type === 'success'
+                          ? 'bg-green-900/50 text-[#72c02c] border border-[#72c02c]'
+                          : 'bg-red-900/50 text-red-400 border border-red-500'
+                      }`}
+                    >
+                      {message.text}
+                    </div>
+                  )}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
-      {/* Main submit button */}
       <div className="mt-8 relative z-10">
         <button
-          onClick={handleSubmit}
-          disabled={
-            submitting ||
-            !isCompleted ||
-            !answers.every((answer) => answer.trim() !== '')
-          }
+          onClick={handleSubmitAll}
+          disabled={unlockedStep <= totalQuestions && !isCompleted}
           className={`w-64 py-3.5 rounded-2xl font-black text-base shadow-xl transition ${
-            isCompleted && answers.every((answer) => answer.trim() !== '')
+            isCompleted || unlockedStep > totalQuestions
               ? 'bg-[#ff5500] hover:bg-[#e04b00] text-white cursor-pointer shadow-[0_0_20px_rgba(255,85,0,0.5)]'
-              : 'bg-[#3a3a3a] text-gray-400 cursor-not-allowed'
+              : 'bg-[#2a2a2a] text-gray-500 cursor-not-allowed'
           }`}
         >
-          {submitting ? 'Submitting...' : 'Submit'}
+          Submit
         </button>
       </div>
 
-      {/* Dynamic hint modal component */}
       {currentHintText !== null && (
         <HintModal
           hintText={currentHintText}
@@ -597,7 +328,6 @@ export default function Game({ setCurrentPage }) {
         />
       )}
 
-      {/* Congratulations modal component */}
       {showCongrats && (
         <CongratsModal
           onClose={() => setShowCongrats(false)}
