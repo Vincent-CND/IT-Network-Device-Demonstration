@@ -3,7 +3,8 @@ import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
 import instruction from "./routes/instruction"
-import question from "./routes/Question"
+import question from "./routes/question"
+import answer from "./routes/answers"
 dotenv.config()
 
 const app = express();
@@ -13,6 +14,7 @@ const port = process.env.PORT
 //middleware
 app.use(cors())
 app.use(express.json())
+app.use(express.urlencoded({extended: true}))
 app.use(morgan("combine"))
 app.use((req,res,next) => {
     console.log(`Method : ${req.method}`)
@@ -25,7 +27,7 @@ app.use((req,res,next) => {
 
 app.use('/',instruction)
 app.use('/',question)
-// app.use(/,)
+app.use('/',answer)
 // app.use(/,)
 
 //server
