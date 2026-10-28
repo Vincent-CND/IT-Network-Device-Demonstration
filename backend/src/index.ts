@@ -5,6 +5,8 @@ import morgan from "morgan";
 import instruction from "./routes/instruction"
 import question from "./routes/question"
 import answer from "./routes/answers"
+import gameMission from "./routes/game_mission"
+
 dotenv.config()
 
 const app = express();
@@ -25,10 +27,13 @@ app.use((req,res,next) => {
 
 //routes
 
+//question section
 app.use('/',instruction)
 app.use('/',question)
 app.use('/',answer)
-// app.use(/,)
+
+//game section
+app.use('/',gameMission)
 
 //server
 app.listen(port,() => {

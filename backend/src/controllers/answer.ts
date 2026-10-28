@@ -6,11 +6,7 @@ interface answerType {
     idAnswer: string | number;
 }
 
-export const answerValid = async (
-    req: Request,
-    res: Response
-): Promise<void> => {
-
+export const answerValid = async (req: Request,res: Response): Promise<void> => {
     try {
         const { userAnswer, idAnswer }: answerType = req.body;
 
