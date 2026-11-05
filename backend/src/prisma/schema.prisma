@@ -27,3 +27,18 @@ model answer {
     result      String  
     question    question?
 }
+
+model game_instruction {
+    id          Int     @id @default(autoincrement())
+    mission     String  @unique
+}
+
+model builder_hint {
+    id          Int     @id @default(autoincrement())
+    hint        String  @db.VarChar(100)
+}
+
+model LAN_hint {
+    id          Int     @id @default(autoincrement())
+    hint        String  @db.Text
+}
