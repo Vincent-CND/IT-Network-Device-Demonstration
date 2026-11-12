@@ -1,0 +1,16 @@
+.nb-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  overflow: hidden;
+  background: #05080a url("../assets/background.jpg") center / cover no-repeat;
+  filter: blur(calc(var(--u) * 3));
+  transform: scale(1.1);
+}
+.nb-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+}
