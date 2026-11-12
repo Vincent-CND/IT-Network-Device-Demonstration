@@ -8,6 +8,7 @@ import answer from "./routes/answers"
 import gameMission from "./routes/game_mission"
 import networkBuilderHint from "./routes/networkBuilder"
 import hiddenHint from "./routes/hiddenHint";
+import builderValidate from "./routes/builder"
 dotenv.config()
 
 const app = express();
@@ -37,6 +38,7 @@ app.use('/',answer)
 app.use('/',gameMission)
 app.use('/',networkBuilderHint)
 app.use('/',hiddenHint)
+app.use('/',builderValidate)
 //server
 app.listen(port,() => {
     console.log(`Server is listening to port ${port}`)

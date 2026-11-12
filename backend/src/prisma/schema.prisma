@@ -42,3 +42,11 @@ model LAN_hint {
     id          Int     @id @default(autoincrement())
     hint        String  @db.Text
 }
+
+model Challenge {
+  id            Int    @id @default(autoincrement())
+  name          String
+  correctAnswer Json   @map("correct_answer")
+
+  @@map("challenges")
+}
