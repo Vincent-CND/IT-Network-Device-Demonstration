@@ -2,21 +2,22 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import Header from "../components/Header";
 import robot from "../assets/robot.png";
-import { getMission } from "../api";
+import { getMissionInstructions, MISSION_STEP_IDS } from "../api";
 import "./MissionSelect.css";
 
 export default function MissionSelect() {
   const navigate = useNavigate();
   const { id: missionId } = useParams();
   const [steps, setSteps] = useState([]);
-  const [opened, setOpened] = useState([]);
+  const [opened, setOpened] = useState([1]);
 
   useEffect(() => {
     let active = true;
-    setOpened([]);
-    getMission(missionId)
+    setOpened([1]);
+    setSteps([]);
+    getMissionInstructions()
       .then((list) => active && setSteps(list))
-      .catch(() => active && setSteps(Array(4).fill("Could not load this mission.")));
+      .catch(() => active && setSteps(MISSION_STEP_IDS.map(() => "Could not load the instructions. Please refresh to try again.")));
     return () => { active = false; };
   }, [missionId]);
 
@@ -29,7 +30,7 @@ export default function MissionSelect() {
 
       <main className="ms-main">
         <nav className="ms-levels" aria-label="Mission steps">
-          {[1, 2, 3, 4].map((n) => {
+          {MISSION_STEP_IDS.map((n) => {
             const isOpen = opened.includes(n);
             return (
               <div className="ms-row" key={n}>
@@ -37,11 +38,12 @@ export default function MissionSelect() {
                   className={`ms-level ${isOpen ? "is-active" : ""}`}
                   onClick={() => toggle(n)}
                   aria-expanded={isOpen}
+                  aria-controls={`mission-step-${n}`}
                 >
                   {n}
                 </button>
-                <div className={`ms-step ${isOpen ? "is-open" : ""}`} aria-hidden={!isOpen}>
-                  {steps[n - 1] ?? ""}
+                <div id={`mission-step-${n}`} className={`ms-step ${isOpen ? "is-open" : ""}`} aria-hidden={!isOpen}>
+                  {steps[n - 1] ?? "Loading instruction…"}
                 </div>
               </div>
             );

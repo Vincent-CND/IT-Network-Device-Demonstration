@@ -29,13 +29,21 @@ In development every request to `/api/...` is proxied to `http://localhost:3000/
 | Call                      | Route                | Status                                    |
 | ------------------------- | -------------------- | ----------------------------------------- |
 | `getStep(id)`             | `GET /step/:id`      | Confirmed from the backend code           |
-| `getQuestion(id)`         | `GET /question/:id`  | **Assumed** from the notes, please confirm |
-| `getHint(id)`             | `GET /hint/:id`      | **Assumed** from the notes, please confirm |
-| `checkAnswer(id, answer)` | `POST /answer`       | **Assumed** body `{ id, answer }`, response `{ correct }` |
+| `getQuestion(id)`         | `GET /question/:id`  | Reads `{ data: { id, question, hint, type } }`; hints are included |
+| `checkAnswer(answerId, answer)` | `POST /answer` | Sends `{ idAnswer, userAnswer }`; maps `{ message: "correct" }` to `{ correct: true } |
 | `sendFeedback(...)`       | `POST /feedback`     | **Assumed**, not in the notes             |
 
-When the backend developer confirms the real routes/shapes, only `src/api/client.js`
-(and the small response handling in `pages/Game.jsx`) needs to change.
+Question and answer calls match the backend controllers. The feedback endpoint still
+needs backend support. API response handling lives in `src/api/client.js`.
+
+The remote question endpoint does not return `answerId`. The current database has
+matching question and answer IDs (1–4), so the frontend uses the question ID for
+`idAnswer`. If those relationships change, the frontend mapping must be updated
+unless the API supplies an explicit `answerId`.
+
+Network Builder and cable validation send `{ userAnswer: [...] }` and recognize
+the remote backend's `{ message: "CONGRATULATIONS !!!" }` response as success.
+These adapters live in `src/network/api.js`; backend source stays unchanged.
 
 ## Text and images
 

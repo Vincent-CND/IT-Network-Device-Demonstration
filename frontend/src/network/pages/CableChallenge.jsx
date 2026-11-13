@@ -89,8 +89,8 @@ export default function CableChallenge() {
           ? { title: "YOU WON!", text: message || "Great job! You arranged all 8 wires in the correct order.", cls: "is-win" }
           : { title: "TRY AGAIN", text: message || "The wire order is not correct yet. Use a hint if you need help.", cls: "" }
       );
-    } catch {
-      setModal({ title: "ERROR", text: "Could not reach the server. Please try again.", cls: "" });
+    } catch (error) {
+      setModal({ title: "ERROR", text: error.message || "Could not validate the cable. Please try again.", cls: "" });
     } finally {
       setChecking(false);
     }

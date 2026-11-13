@@ -5,7 +5,7 @@ import MatrixBackground from '../components/MatrixBackground.jsx'
 import QuestionCard from '../components/QuestionCard.jsx'
 import HintModal from '../components/HintModal.jsx'
 import CongratsModal from '../components/CongratsModal.jsx'
-import { checkAnswer, getHint, getQuestion } from '../api/client.js'
+import { checkAnswer, getQuestion } from '../api/client.js'
 
 // The handwritten notes list Q1-Q4 (the design also shows 4 cards).
 const QUESTION_IDS = [1, 2, 3, 4]
@@ -13,7 +13,7 @@ const QUESTION_IDS = [1, 2, 3, 4]
 export default function Game() {
   const navigate = useNavigate()
 
-  const [questions, setQuestions] = useState([]) // [{ id, text }]
+  const [questions, setQuestions] = useState([]) // [{ id, text, hint, answerId }]
   const [loadError, setLoadError] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -29,11 +29,7 @@ export default function Game() {
   useEffect(() => {
     let cancelled = false
 
-    Promise.all(
-      QUESTION_IDS.map((id) =>
-        getQuestion(id).then((data) => ({ id, text: data.message ?? data.question ?? '' })),
-      ),
-    )
+    Promise.all(QUESTION_IDS.map(getQuestion))
       .then((list) => !cancelled && setQuestions(list))
       .catch(() => !cancelled && setLoadError(true))
       .finally(() => !cancelled && setLoading(false))
@@ -60,9 +56,8 @@ export default function Game() {
     setAt(setBusy, i, true)
     setAt(setErrors, i, '')
     try {
-      const result = await checkAnswer(questions[i].id, answer)
-      const correct = result.correct ?? result.isCorrect ?? result.success ?? false
-      if (correct) {
+      const result = await checkAnswer(questions[i].answerId, answer)
+      if (result.correct) {
         setAt(setSolved, i, true)
       } else {
         setAt(setErrors, i, result.message || 'Not quite. Try again or use the hint.')
@@ -74,14 +69,8 @@ export default function Game() {
     }
   }
 
-  async function handleHint(i) {
-    setHint({ loading: true, text: '' })
-    try {
-      const data = await getHint(questions[i].id)
-      setHint({ loading: false, text: data.message ?? data.hint ?? '' })
-    } catch {
-      setHint({ loading: false, text: 'Could not load the hint. Please try again.' })
-    }
+  function handleHint(i) {
+    setHint({ loading: false, text: questions[i].hint || 'No hint is available for this question.' })
   }
 
   return (

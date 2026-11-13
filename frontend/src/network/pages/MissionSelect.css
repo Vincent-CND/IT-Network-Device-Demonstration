@@ -3,7 +3,8 @@
   width: 100vw;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   font-family: "Inter", system-ui, sans-serif;
   color: var(--white);
   background: transparent;
@@ -60,17 +61,16 @@
 .ms-step {
   flex: 1;
   min-width: 0;
-  height: calc(var(--u) * 45);
+  min-height: calc(var(--u) * 45);
   display: flex;
   align-items: center;
-  padding: 0 calc(var(--u) * 28);
+  padding: calc(var(--u) * 8) calc(var(--u) * 28);
   border: 1.5px solid rgba(255, 255, 255, 0.9);
   border-radius: 999px;
   background: #08282a;
   font-size: calc(var(--u) * 11);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 
   opacity: 0;
   transform: translateX(calc(var(--u) * -14));

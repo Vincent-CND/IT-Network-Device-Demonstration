@@ -148,8 +148,8 @@ export default function MissionBuilder() {
           text: message || "The network is not correct yet. Use the hint if you need help.",
         });
       }
-    } catch {
-      setModal({ title: "ERROR", text: "Could not reach the server. Please try again." });
+    } catch (error) {
+      setModal({ title: "ERROR", text: error.message || "Could not validate the network. Please try again." });
     } finally {
       setChecking(false);
     }

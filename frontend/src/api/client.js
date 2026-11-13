@@ -3,7 +3,7 @@
 //
 // In development BASE is "/api" and the Vite dev server proxies it to
 // http://localhost:3000 (see vite.config.js). For production set VITE_API_URL.
-const BASE = (import.meta.env.VITE_API_URL ?? '/api').replace(/\/$/, '')
+const BASE = (import.meta.env?.VITE_API_URL ?? '/api').replace(/\/$/, '')
 
 async function request(path, options = {}) {
   const response = await fetch(`${BASE}${path}`, {
@@ -24,25 +24,24 @@ export function getStep(id) {
   return request(`/step/${encodeURIComponent(id)}`)
 }
 
-// GET /question/:id  ->  { message: "<question text>" }
-// ASSUMPTION: from the handwritten notes ("get /question"). Confirm with the backend dev.
-export function getQuestion(id) {
-  return request(`/question/${encodeURIComponent(id)}`)
+// GET /question/:id returns { data: { id, question, hint, type } }.
+export async function getQuestion(id) {
+  const { data } = await request(`/question/${encodeURIComponent(id)}`)
+  if (!data || typeof data.question !== 'string' || !data.question.trim()) {
+    throw new Error('Question not found')
+  }
+  // The remote API omits answerId. The current four question/answer pairs
+  // have matching IDs; prefer an explicit answerId if the API later exposes it.
+  return { id: data.id, text: data.question, hint: data.hint, answerId: data.answerId ?? data.id }
 }
 
-// GET /hint/:id  ->  { message: "<hint text>" }
-// ASSUMPTION: from the handwritten notes ("get /hint/{id}"). Confirm with the backend dev.
-export function getHint(id) {
-  return request(`/hint/${encodeURIComponent(id)}`)
-}
-
-// POST /answer  body: { id, answer }  ->  { correct: boolean, message?: string }
-// ASSUMPTION: the notes only say "post /answer". Confirm body + response with the backend dev.
-export function checkAnswer(id, answer) {
-  return request('/answer', {
+// POST /answer uses the question's related answer ID, not its question ID.
+export async function checkAnswer(answerId, answer) {
+  const result = await request('/answer', {
     method: 'POST',
-    body: JSON.stringify({ id, answer }),
+    body: JSON.stringify({ idAnswer: answerId, userAnswer: answer }),
   })
+  return { correct: result.message === 'correct' }
 }
 
 // POST /feedback  body: { name, age, message, rating }
