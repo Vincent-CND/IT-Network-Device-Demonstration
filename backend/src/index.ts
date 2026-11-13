@@ -3,7 +3,13 @@ import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
 import instruction from "./routes/instruction"
-import question from "./routes/Question"
+import question from "./routes/question"
+import answer from "./routes/answers"
+import gameMission from "./routes/game_mission"
+import networkBuilderHint from "./routes/networkBuilder"
+import hiddenHint from "./routes/hiddenHint";
+import builderValidate from "./routes/builder"
+import lanValidate from "./routes/lan"
 dotenv.config()
 
 const app = express();
@@ -13,6 +19,7 @@ const port = process.env.PORT
 //middleware
 app.use(cors())
 app.use(express.json())
+app.use(express.urlencoded({extended: true}))
 app.use(morgan("combine"))
 app.use((req,res,next) => {
     console.log(`Method : ${req.method}`)
@@ -23,11 +30,17 @@ app.use((req,res,next) => {
 
 //routes
 
+//question section
 app.use('/',instruction)
 app.use('/',question)
-// app.use(/,)
-// app.use(/,)
+app.use('/',answer)
 
+//game section
+app.use('/',gameMission)
+app.use('/',networkBuilderHint)
+app.use('/',hiddenHint)
+app.use('/',builderValidate)
+app.use('/',lanValidate)
 //server
 app.listen(port,() => {
     console.log(`Server is listening to port ${port}`)
