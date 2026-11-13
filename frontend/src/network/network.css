@@ -1,0 +1,17 @@
+.nb-root {
+  --u: min(calc(100vw / 576), calc(100vh / 372));
+  --green: #3bd520;
+  --green-dark: #0f3b2e;
+  --panel: #07211b;
+  --white: #ffffff;
+  --bg-dark: #05080a;
+
+  position: relative;
+  isolation: isolate;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg-dark);
+  color: var(--white);
+  font-family: "Inter", system-ui, sans-serif;
+}

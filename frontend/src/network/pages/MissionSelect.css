@@ -1,0 +1,173 @@
+.ms-page {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: "Inter", system-ui, sans-serif;
+  color: var(--white);
+  background: transparent;
+}
+
+.ms-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  justify-content: space-between;
+  padding:
+    calc(var(--u) * 50)
+    calc(var(--u) * 24)
+    calc(var(--u) * 50)
+    calc(var(--u) * 27);
+  background: transparent;
+}
+
+.ms-levels {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--u) * 6.5);
+  align-self: flex-start;
+  margin-right: calc(var(--u) * 14);
+}
+
+.ms-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--u) * 7);
+}
+
+.ms-level {
+  flex: 0 0 calc(var(--u) * 45);
+  width: calc(var(--u) * 45);
+  height: calc(var(--u) * 45);
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  background: var(--green-dark);
+  color: var(--white);
+  font-family: inherit;
+  font-size: calc(var(--u) * 20);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+}
+.ms-level:hover { transform: scale(1.06); }
+.ms-level.is-active {
+  box-shadow: 0 0 calc(var(--u) * 10) rgba(59, 213, 32, 0.55);
+}
+
+.ms-step {
+  flex: 1;
+  min-width: 0;
+  height: calc(var(--u) * 45);
+  display: flex;
+  align-items: center;
+  padding: 0 calc(var(--u) * 28);
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  border-radius: 999px;
+  background: #08282a;
+  font-size: calc(var(--u) * 11);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  opacity: 0;
+  transform: translateX(calc(var(--u) * -14));
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.ms-step.is-open {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.ms-level:focus-visible,
+.ms-start:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 3px;
+}
+
+.ms-side {
+  flex: 0 0 calc(var(--u) * 134);
+  width: calc(var(--u) * 134);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ms-bubble {
+  width: calc(var(--u) * 105);
+  padding: calc(var(--u) * 8) calc(var(--u) * 12);
+  align-self: flex-end;
+  background: var(--white);
+  color: #111;
+  font-size: calc(var(--u) * 8.7);
+  font-style: italic;
+  line-height: 1.25;
+  border-radius: calc(var(--u) * 14) calc(var(--u) * 14) calc(var(--u) * 14) 0;
+  animation: ms-pop 0.5s 0.3s ease-out both;
+  transform-origin: 0 100%;
+}
+
+.ms-robot {
+  position: relative;
+  width: calc(var(--u) * 80);
+  margin: calc(var(--u) * 9) 0 calc(var(--u) * 19);
+}
+.ms-robot img {
+  width: 100%;
+  display: block;
+  mix-blend-mode: screen;
+  animation: ms-float 3.6s ease-in-out infinite;
+  transform-origin: 50% 80%;
+}
+.ms-robot__shadow {
+  width: 55%;
+  height: calc(var(--u) * 5);
+  margin: calc(var(--u) * 2) auto 0;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(59, 213, 32, 0.35), transparent 70%);
+  animation: ms-shadow 3.6s ease-in-out infinite;
+}
+
+.ms-start {
+  width: 100%;
+  height: calc(var(--u) * 37);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--u) * 9);
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #4be02c, #2fc014);
+  color: var(--white);
+  font-family: inherit;
+  font-size: calc(var(--u) * 14);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.2s;
+}
+.ms-start svg { width: calc(var(--u) * 11); height: calc(var(--u) * 11); }
+.ms-start:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(59, 213, 32, 0.45);
+}
+
+@keyframes ms-float {
+  0%, 100% { transform: translateY(0) rotate(-2deg); }
+  50%      { transform: translateY(calc(var(--u) * -6)) rotate(2deg); }
+}
+@keyframes ms-shadow {
+  0%, 100% { transform: scale(1);    opacity: 0.9; }
+  50%      { transform: scale(0.75); opacity: 0.5; }
+}
+@keyframes ms-pop {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nb-root *, .nb-root *::before, .nb-root *::after { transition: none !important; animation: none !important; }
+}
