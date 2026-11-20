@@ -50,3 +50,16 @@ model Challenge {
 
   @@map("challenges")
 }
+
+model Feedback {
+  id           Int      @id @default(autoincrement())
+
+  satisfaction Int
+  enjoyment    Int
+  easeOfUse    Int      @map("ease_of_use")
+  learning     Int
+  interest     Int
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("feedback")
+}

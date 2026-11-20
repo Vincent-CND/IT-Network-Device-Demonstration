@@ -10,6 +10,7 @@ import networkBuilderHint from "./routes/networkBuilder"
 import hiddenHint from "./routes/hiddenHint";
 import builderValidate from "./routes/builder"
 import lanValidate from "./routes/lan"
+import feedback from "./routes/feedback"
 dotenv.config()
 
 const app = express();
@@ -41,6 +42,9 @@ app.use('/',networkBuilderHint)
 app.use('/',hiddenHint)
 app.use('/',builderValidate)
 app.use('/',lanValidate)
+
+//feedback
+app.use('/',feedback)
 //server
 app.listen(port,() => {
     console.log(`Server is listening to port ${port}`)
