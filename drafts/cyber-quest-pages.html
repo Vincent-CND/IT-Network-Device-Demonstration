@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Cyber Quest — Page drafts</title>
+  <link rel="stylesheet" href="cyber-quest-pages.css">
+  <script src="cyber-quest-pages.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#content">Skip to content</a>
+  <aside class="review" aria-label="Design review">
+    <div class="wrap review-inner">
+      <strong>Design preview</strong>
+      <nav aria-label="Draft pages">
+        <a href="cyber-quest-layout.html">Home</a>
+        <a href="#mission">Mission</a>
+        <a href="#game">Quiz</a>
+        <a href="#network">Network brief</a>
+        <a href="#builder">Builder</a>
+        <a href="#cable">Cable challenge</a>
+        <a href="#feedback">Feedback</a>
+      </nav>
+    </div>
+  </aside>
+
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a href="cyber-quest-layout.html" class="brand">
+        <img src="../frontend/src/assets/logo.png" alt="">
+        <span>CYBER QUEST</span>
+      </a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="#mission" data-area="cyber">Cyber Quiz</a>
+        <a href="#network" data-area="network">Network Builder</a>
+        <a href="#feedback" data-area="feedback">Feedback</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap" id="content" tabindex="-1">
+    <section data-page="mission" class="page" data-section="cyber" aria-labelledby="mission-title">
+      <a class="back" href="cyber-quest-layout.html#missions">← All missions</a>
+      <div class="brief-hero">
+        <div>
+          <p class="eyebrow">Cyber Quiz · Mission briefing</p>
+          <h1 id="mission-title" tabindex="-1">Unlock the challenge.</h1>
+          <p class="intro">Two boxes stand between you and the next quest. Review the steps, then put your cybersecurity knowledge to the test.</p>
+          <a class="button primary" href="#game">Start the quiz <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="chest-stage" aria-hidden="true">
+          <div class="chest-unit"><img src="../frontend/src/assets/boxA.png" alt=""><span>BOX A</span></div>
+          <div class="chest-unit"><img src="../frontend/src/assets/boxA.png" alt=""><span>BOX B</span></div>
+        </div>
+      </div>
+      <div class="brief-details">
+        <div><h2>Five steps to get ready</h2><p>Open each step to see what to do.</p></div>
+        <div class="steps">
+          <details open><summary><span>01</span> Read the mission</summary><p>Review the challenge before opening the quiz.</p></details>
+          <details><summary><span>02</span> Start at question one</summary><p>Read the prompt and type your answer.</p></details>
+          <details><summary><span>03</span> Use a hint if you get stuck</summary><p>A hint gives you a clue so you can try again.</p></details>
+          <details><summary><span>04</span> Unlock the next question</summary><p>Each correct answer unlocks the next question.</p></details>
+          <details><summary><span>05</span> Finish the quiz</summary><p>Submit the completed quiz to continue to Network Builder.</p></details>
+        </div>
+      </div>
+    </section>
+
+    <section data-page="game" class="page" data-section="cyber" aria-labelledby="game-title" hidden>
+      <a class="back" href="#mission">← Mission briefing</a>
+      <div class="page-heading">
+        <div><p class="eyebrow">Cyber Quiz</p><h1 id="game-title" tabindex="-1">Unlock the challenge.</h1><p class="intro">Answer one question at a time. Each correct answer unlocks the next.</p></div>
+        <div class="progress-card">
+          <label for="quiz-progress">Quiz progress <span id="quiz-count">0 of 4 solved</span></label>
+          <progress id="quiz-progress" value="0" max="4"></progress>
+        </div>
+      </div>
+      <div class="game-grid">
+        <article class="panel question">
+          <p class="eyebrow" id="question-number">Question 1 of 4</p>
+          <h2 id="question-text">What extra step can protect your account if someone learns your password?</h2>
+          <form id="quiz-form">
+            <label for="answer">Your answer</label>
+            <input id="answer" name="answer" type="text" placeholder="Type your answer" aria-describedby="question-text" required>
+            <p class="status" id="quiz-status" role="status"></p>
+            <div class="actions">
+              <button class="button secondary" type="button" id="quiz-hint">Show hint</button>
+              <button class="button primary" type="submit">Check answer <span aria-hidden="true">→</span></button>
+            </div>
+          </form>
+          <div id="quiz-complete" hidden>
+            <p>All four answers are correct. You’re ready for the next mission.</p>
+            <button class="button primary" type="button" id="finish-quiz">Submit quiz <span aria-hidden="true">→</span></button>
+          </div>
+        </article>
+        <aside class="panel quiz-path" aria-labelledby="quiz-path-title">
+          <h2 id="quiz-path-title">Questions</h2>
+          <ol id="quiz-path">
+            <li aria-current="step"><span>01</span>Question 1<small>In progress</small></li>
+            <li><span>02</span>Question 2<small>Locked</small></li>
+            <li><span>03</span>Question 3<small>Locked</small></li>
+            <li><span>04</span>Question 4<small>Locked</small></li>
+          </ol>
+        </aside>
+      </div>
+    </section>
+
+    <section data-page="network" class="page" data-section="network" aria-labelledby="network-title" hidden>
+      <a class="back" href="cyber-quest-layout.html#missions">← All missions</a>
+      <div class="page-heading">
+        <div><p class="eyebrow warm">Network Builder · Mission briefing</p><h1 id="network-title" tabindex="-1">Connect your world.</h1><p class="intro">Build a small network and check how the devices connect. Then take on the cable challenge.</p></div>
+        <a class="button primary" href="#builder">Start mission <span aria-hidden="true">↗</span></a>
+      </div>
+      <div class="game-grid network-brief">
+        <div class="steps" aria-label="Mission steps">
+          <details open><summary><span>01</span> Add devices</summary><p>Choose devices from the toolbox. In this draft, the internet, router, and switch are already on the canvas. Add a PC to complete the setup.</p></details>
+          <details><summary><span>02</span> Connect the devices</summary><p>Turn on the cable tool and select two devices. Connect the PC to the switch.</p></details>
+          <details><summary><span>03</span> Check your network</summary><p>Select Validate network. Use the hint if you need help.</p></details>
+          <details><summary><span>04</span> Try the cable challenge</summary><p>Place the eight wires in the connector and check the order.</p></details>
+        </div>
+        <aside class="panel guide">
+          <img src="../frontend/src/network/assets/robot.png" alt="">
+          <div><h2>Need a hand?</h2><p>Look for the hint button while you’re building.</p></div>
+        </aside>
+      </div>
+    </section>
+
+    <section data-page="builder" class="page" data-section="network" aria-labelledby="builder-title" hidden>
+      <a class="back" href="#network">← Network briefing</a>
+      <div class="page-heading">
+        <div><p class="eyebrow warm">Network Builder</p><h1 id="builder-title" tabindex="-1">Build your network.</h1><p class="intro">Add a PC to the canvas, then connect it to the switch.</p></div>
+        <button class="button secondary" type="button" id="builder-hint">Show hint</button>
+      </div>
+      <div class="workspace">
+        <aside class="panel palette" aria-labelledby="devices-title">
+          <h2 id="devices-title">Devices</h2>
+          <div class="devices">
+            <button type="button" data-device="Internet"><span class="device-icon internet" aria-hidden="true"></span>Internet</button>
+            <button type="button" data-device="Router"><span class="device-icon router" aria-hidden="true"></span>Router</button>
+            <button type="button" data-device="Switch"><span class="device-icon switch" aria-hidden="true"></span>Switch</button>
+            <button type="button" data-device="PC"><span class="device-icon pc" aria-hidden="true"></span>PC</button>
+          </div>
+          <button class="button secondary" type="button" id="cable-tool" aria-pressed="false">Cable tool</button>
+        </aside>
+        <div class="panel board">
+          <div class="board-header"><h2>Network canvas</h2><span id="node-count">3 devices · 2 connections</span></div>
+          <div class="canvas" id="network-canvas" aria-label="Network canvas">
+            <div id="network-lines" class="network-lines" aria-hidden="true"></div>
+            <div id="network-nodes" class="network-nodes"></div>
+          </div>
+          <div class="board-footer">
+            <p class="status" id="builder-status" role="status">Choose a device to add it to the canvas.</p>
+            <div class="actions">
+              <button class="button secondary" type="button" id="reset-builder">Reset</button>
+              <button class="button primary" type="button" id="validate-builder">Validate network <span aria-hidden="true">→</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section data-page="cable" class="page" data-section="network" aria-labelledby="cable-title" hidden>
+      <a class="back" href="#builder">← Network canvas</a>
+      <div class="page-heading">
+        <div><p class="eyebrow warm">Network Builder · Final challenge</p><h1 id="cable-title" tabindex="-1">Wire the connector.</h1><p class="intro">Select a wire, then select a numbered slot to place it. Select a filled slot to remove its wire.</p></div>
+      </div>
+      <div class="game-grid cable-grid">
+        <article class="panel cable-board">
+          <div class="board-header"><h2>Ethernet connector</h2><span id="wire-count">0 of 8 placed</span></div>
+          <div class="connector" id="connector" role="group" aria-label="Connector slots"></div>
+          <div class="wire-area"><h3>Wire tray</h3><div id="wire-tray" class="wire-tray" role="group" aria-label="Available wires"></div></div>
+          <div class="board-footer">
+            <p class="status" id="cable-status" role="status">Choose a wire to begin.</p>
+            <div class="actions">
+              <button class="button secondary" type="button" id="reset-wires">Reset</button>
+              <button class="button primary" type="button" id="validate-wires">Validate cable <span aria-hidden="true">→</span></button>
+            </div>
+          </div>
+        </article>
+        <aside class="panel cable-hints">
+          <h2>Hints</h2><p>Reveal one pair of wires at a time.</p>
+          <div class="hint-list" aria-label="Cable hints">
+            <button class="button secondary" type="button" data-wire-hint="0">Slots 1 and 2</button>
+            <button class="button secondary" type="button" data-wire-hint="2">Slots 3 and 4</button>
+            <button class="button secondary" type="button" data-wire-hint="4">Slots 5 and 6</button>
+            <button class="button secondary" type="button" data-wire-hint="6">Slots 7 and 8</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section data-page="feedback" class="page" data-section="feedback" aria-labelledby="feedback-title" hidden>
+      <a class="back" href="cyber-quest-layout.html">← Home</a>
+      <div class="feedback-grid">
+        <div class="feedback-intro">
+          <p class="eyebrow">Cyber Quest feedback</p>
+          <h1 id="feedback-title" tabindex="-1">How was the quest?</h1>
+          <p class="intro">Tell us what you enjoyed or where you got stuck.</p>
+          <img src="../frontend/src/network/assets/robot.png" alt="">
+        </div>
+        <div class="panel feedback-card">
+          <form id="feedback-form">
+            <fieldset>
+              <legend>How would you rate your experience?</legend>
+              <div class="ratings">
+                <label><input name="rating" type="radio" value="1" required><span class="rating-face" aria-hidden="true">☹</span><span>1<span class="sr-only"> — Very poor</span></span></label>
+                <label><input name="rating" type="radio" value="2"><span class="rating-face" aria-hidden="true">☹</span><span>2<span class="sr-only"> — Poor</span></span></label>
+                <label><input name="rating" type="radio" value="3"><span class="rating-face" aria-hidden="true">⊖</span><span>3<span class="sr-only"> — Okay</span></span></label>
+                <label><input name="rating" type="radio" value="4"><span class="rating-face" aria-hidden="true">☺</span><span>4<span class="sr-only"> — Good</span></span></label>
+                <label><input name="rating" type="radio" value="5"><span class="rating-face" aria-hidden="true">☻</span><span>5<span class="sr-only"> — Excellent</span></span></label>
+              </div>
+              <div class="rating-scale" aria-hidden="true"><span>Very poor</span><span>Excellent</span></div>
+            </fieldset>
+            <label for="feedback-message">Your message <span class="muted">(optional)</span></label>
+            <textarea id="feedback-message" name="message" rows="5" placeholder="What would you like us to know?"></textarea>
+            <p class="form-note">This form uses preview data only.</p>
+            <button type="submit" class="button primary">Submit feedback <span aria-hidden="true">→</span></button>
+          </form>
+          <div id="feedback-done" hidden>
+            <h2 tabindex="-1">Thanks for trying the draft.</h2>
+            <p>Your feedback wasn’t sent. This is a preview of the confirmation screen.</p>
+            <a class="button primary" href="cyber-quest-layout.html">Back to home</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer"><div class="wrap footer-inner"><strong>CYBER QUEST<span>.</span></strong><a href="cyber-quest-layout.html#missions">Explore missions ↗</a></div></footer>
+
+  <dialog id="preview-dialog" aria-labelledby="dialog-title">
+    <form method="dialog"><button class="dialog-close" type="submit" aria-label="Close dialog">×</button></form>
+    <h2 id="dialog-title"></h2>
+    <p id="dialog-message"></p>
+    <a id="dialog-link" class="button primary" hidden></a>
+    <form method="dialog" id="dialog-dismiss"><button class="button primary" type="submit">Got it</button></form>
+  </dialog>
+</body>
+</html>
