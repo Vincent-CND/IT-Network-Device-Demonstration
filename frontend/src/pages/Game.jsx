@@ -1,138 +1,60 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import gameLogo from '../assets/game-logo.png'
-import MatrixBackground from '../components/MatrixBackground.jsx'
-import QuestionCard from '../components/QuestionCard.jsx'
-import HintModal from '../components/HintModal.jsx'
-import CongratsModal from '../components/CongratsModal.jsx'
-import { checkAnswer, getQuestion } from '../api/client.js'
+import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { getQuestion, checkAnswer } from '../api/client.js'
+import useResource from '../hooks/useResource.js'
+import LoadState from '../components/LoadState.jsx'
+import MessageDialog from '../components/MessageDialog.jsx'
 
-// The handwritten notes list Q1-Q4 (the design also shows 4 cards).
 const QUESTION_IDS = [1, 2, 3, 4]
+const loadQuestions = () => Promise.all(QUESTION_IDS.map(getQuestion))
 
 export default function Game() {
-  const navigate = useNavigate()
+  const resource = useResource(loadQuestions)
+  const [solved, setSolved] = useState(0)
+  const [answer, setAnswer] = useState('')
+  const [busy, setBusy] = useState(false)
+  const pending = useRef(false)
+  const [status, setStatus] = useState('')
+  const [message, setMessage] = useState(null)
+  const question = resource.data?.[solved]
+  const complete = solved === QUESTION_IDS.length
 
-  const [questions, setQuestions] = useState([]) // [{ id, text, hint, answerId }]
-  const [loadError, setLoadError] = useState(false)
-  const [loading, setLoading] = useState(true)
-
-  // Per-question UI state, indexed like `questions`
-  const [answers, setAnswers] = useState(QUESTION_IDS.map(() => ''))
-  const [solved, setSolved] = useState(QUESTION_IDS.map(() => false))
-  const [busy, setBusy] = useState(QUESTION_IDS.map(() => false))
-  const [errors, setErrors] = useState(QUESTION_IDS.map(() => ''))
-
-  const [hint, setHint] = useState(null) // { loading, text } | null
-  const [showCongrats, setShowCongrats] = useState(false)
-
-  useEffect(() => {
-    let cancelled = false
-
-    Promise.all(QUESTION_IDS.map(getQuestion))
-      .then((list) => !cancelled && setQuestions(list))
-      .catch(() => !cancelled && setLoadError(true))
-      .finally(() => !cancelled && setLoading(false))
-
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const setAt = (setter, index, value) =>
-    setter((prev) => prev.map((item, i) => (i === index ? value : item)))
-
-  // The first unsolved question is the "current" one; later ones stay blurred.
-  const firstUnsolved = solved.indexOf(false)
-  const allSolved = firstUnsolved === -1
-
-  async function handleDone(i) {
-    const answer = answers[i].trim()
-    if (!answer) {
-      setAt(setErrors, i, 'Type your answer first.')
-      return
-    }
-
-    setAt(setBusy, i, true)
-    setAt(setErrors, i, '')
+  async function submit(event) {
+    event.preventDefault()
+    if (!question || !answer.trim() || pending.current) return
+    pending.current = true
+    setBusy(true)
+    setStatus('')
     try {
-      const result = await checkAnswer(questions[i].answerId, answer)
+      const result = await checkAnswer(question.answerId, answer.trim())
       if (result.correct) {
-        setAt(setSolved, i, true)
-      } else {
-        setAt(setErrors, i, result.message || 'Not quite. Try again or use the hint.')
-      }
-    } catch {
-      setAt(setErrors, i, 'Could not reach the server.')
-    } finally {
-      setAt(setBusy, i, false)
-    }
+        setSolved(value => value + 1)
+        setAnswer('')
+        setStatus('Correct! The next question is ready.')
+      } else setStatus('Not quite. Try again, or use a hint for a clue.')
+    } catch { setStatus('Could not check your answer. Please try again.') }
+    finally { pending.current = false; setBusy(false) }
   }
 
-  function handleHint(i) {
-    setHint({ loading: false, text: questions[i].hint || 'No hint is available for this question.' })
-  }
-
-  return (
-    <div className="relative min-h-screen bg-matrix">
-      <MatrixBackground />
-
-      <div className="relative mx-auto max-w-3xl px-6 py-6">
-        {/* Logo */}
-        <div className="mb-6 flex items-center justify-center gap-2">
-          <img src={gameLogo} alt="" className="h-10 w-auto" />
-          <span className="text-lg font-bold uppercase leading-4 text-white">
-            Cyber
-            <br />
-            Quest
-          </span>
-        </div>
-
-        {loading && <p className="text-center text-white">Loading questions…</p>}
-
-        {loadError && (
-          <p role="alert" className="rounded-md bg-red-950/70 px-4 py-3 text-center text-sm text-red-200">
-            Could not load the questions. Make sure the backend is running on port 3000.
-          </p>
-        )}
-
-        <div className="space-y-3">
-          {questions.map((q, i) => (
-            <QuestionCard
-              key={q.id}
-              question={q}
-              answer={answers[i]}
-              solved={solved[i]}
-              locked={!allSolved && i > firstUnsolved}
-              busy={busy[i]}
-              error={errors[i]}
-              onAnswerChange={(value) => setAt(setAnswers, i, value)}
-              onHint={() => handleHint(i)}
-              onDone={() => handleDone(i)}
-            />
-          ))}
-        </div>
-
-        <div className="mt-8 flex justify-center">
-          <button
-            type="button"
-            disabled={!allSolved || questions.length === 0}
-            onClick={() => setShowCongrats(true)}
-            className="w-56 rounded-xl bg-brand py-2.5 font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-gray-600 disabled:text-gray-300 disabled:hover:brightness-100"
-          >
-            Submit
-          </button>
-        </div>
-      </div>
-
-      <HintModal open={hint !== null} hint={hint} onClose={() => setHint(null)} />
-
-      <CongratsModal
-        open={showCongrats}
-        onClose={() => setShowCongrats(false)}
-        onContinue={() => navigate('/network/1')}
-        message="You solved every question! One more challenge is waiting for you."
-      />
+  return <section className="wrap page" aria-labelledby="game-title">
+    <Link className="back" to="/mission">← Mission briefing</Link>
+    <div className="page-heading"><div><p className="eyebrow">Cyber Quiz</p><h1 id="game-title">Unlock the challenge.</h1><p className="intro">Answer one question at a time. Each correct answer unlocks the next.</p></div>
+      <div className="progress-card"><label htmlFor="quiz-progress">Quiz progress <span>{solved} of 4 solved</span></label><progress id="quiz-progress" value={solved} max="4" /></div>
     </div>
-  )
+    <div className="game-grid">
+      <article className="panel question" aria-busy={resource.loading || busy}>
+        <LoadState {...resource} />
+        {question && <><p className="eyebrow">Question {solved + 1} of 4</p><h2 id="question-text">{question.text}</h2>
+          <form onSubmit={submit}><label htmlFor="answer">Your answer</label>
+            <input id="answer" type="text" placeholder="Type your answer" aria-describedby="question-text quiz-status" value={answer} onChange={event => setAnswer(event.target.value)} required disabled={busy} autoComplete="off" />
+            <p className="status" id="quiz-status" role="status">{status}</p>
+            <div className="actions"><button className="button secondary" type="button" onClick={() => setMessage({ title: 'A little hint', text: question.hint || 'No hint is available for this question.' })}>Show hint</button>
+              <button className="button primary" disabled={busy || !answer.trim()}>{busy ? 'Checking…' : 'Check answer'}</button></div>
+          </form></>}
+        {complete && <div id="quiz-complete" role="status"><p className="eyebrow">Mission complete</p><h2>All four answers are correct.</h2><p>You’re ready for the next mission.</p><button className="button primary" onClick={() => setMessage({ title: 'Congratulations!', text: 'You solved every question. Build your network in the next quest.', to: '/network/1', action: 'Continue to Network Builder' })}>Submit quiz</button></div>}
+      </article>
+      <aside className="panel quiz-path" aria-labelledby="quiz-path-title"><h2 id="quiz-path-title">Questions</h2><ol>{QUESTION_IDS.map((id, i) => <li key={id} aria-current={i === solved ? 'step' : undefined} data-solved={i < solved ? '' : undefined}><span>0{id}</span>Question {id}<small>{i < solved ? 'Solved' : i === solved ? 'In progress' : 'Locked'}</small></li>)}</ol></aside>
+    </div>
+    <MessageDialog message={message} onClose={() => setMessage(null)} />
+  </section>
 }

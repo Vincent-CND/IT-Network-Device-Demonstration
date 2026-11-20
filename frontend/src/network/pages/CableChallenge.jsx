@@ -1,239 +1,76 @@
-import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import Header from "../components/Header";
-import { getCableHint, validateCable } from "../api";
-import "./CableChallenge.css";
+import { useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { getCableHint, validateCable } from '../api.js'
+import MessageDialog from '../../components/MessageDialog.jsx'
 
 const WIRES = [
-  { id: "wo",  color: "#f58a1f", striped: true  },
-  { id: "o",   color: "#f58a1f", striped: false },
-  { id: "wg",  color: "#1f9d3a", striped: true  },
-  { id: "g",   color: "#1f9d3a", striped: false },
-  { id: "wb",  color: "#1f6fe0", striped: true  },
-  { id: "b",   color: "#1f6fe0", striped: false },
-  { id: "wbr", color: "#7a4a1d", striped: true  },
-  { id: "br",  color: "#7a4a1d", striped: false },
-];
-
-const wireById = (id) => WIRES.find((w) => w.id === id);
-
-function Wire({ wire, onDragStart, onDragEnd }) {
-  return (
-    <div
-      className={`cc-wire ${wire.striped ? "is-striped" : ""}`}
-      style={{ "--c": wire.color }}
-      draggable
-      onDragStart={onDragStart}
-      onDragEnd={onDragEnd}
-    />
-  );
+  { id: 'wo', label: 'White / Orange', color: '#f58a1f', striped: true },
+  { id: 'o', label: 'Orange', color: '#f58a1f' },
+  { id: 'wg', label: 'White / Green', color: '#1f9d3a', striped: true },
+  { id: 'g', label: 'Green', color: '#1f9d3a' },
+  { id: 'wb', label: 'White / Blue', color: '#1f6fe0', striped: true },
+  { id: 'b', label: 'Blue', color: '#1f6fe0' },
+  { id: 'wbr', label: 'White / Brown', color: '#996137', striped: true },
+  { id: 'br', label: 'Brown', color: '#996137' },
+]
+const wireById = id => WIRES.find(wire => wire.id === id)
+function Swatch({ wire, slot = false }) {
+  return <span aria-hidden="true" className={`${slot ? 'slot-wire' : 'wire-swatch'} ${wire ? `wire-color ${wire.striped ? 'striped' : ''}` : ''}`} style={{ '--wire': wire?.color }} />
 }
 
 export default function CableChallenge() {
-  const navigate = useNavigate();
-  const { id: missionId } = useParams();
-  const dragRef = useRef(null);
-  const redirectRef = useRef(null);
-  const [slots, setSlots] = useState(Array(8).fill(null));
-  const [modal, setModal] = useState(null);
-  const [checking, setChecking] = useState(false);
+  const [slots, setSlots] = useState(Array(8).fill(null))
+  const [selected, setSelected] = useState(null)
+  const [status, setStatus] = useState('Select a wire, then select a slot. Select a filled slot to return its wire.')
+  const [checking, setChecking] = useState(false)
+  const [message, setMessage] = useState(null)
+  const pending = useRef(false)
+  const hintRequest = useRef(0)
 
-  useEffect(() => () => clearTimeout(redirectRef.current), []);
-
-  const startDrag = (e, wireId, from) => {
-    dragRef.current = { wireId, from };
-    e.dataTransfer.setData("text/plain", wireId);
-    e.dataTransfer.effectAllowed = "move";
-  };
-  const endDrag = () => { dragRef.current = null; };
-
-  const dropOnSlot = (e, i) => {
-    e.preventDefault();
-    const d = dragRef.current;
-    if (!d) return;
-    setSlots((prev) => {
-      const next = [...prev];
-      const occupant = next[i];
-      if (d.from !== "tray") next[d.from] = occupant;
-      next[i] = d.wireId;
-      return next;
-    });
-    dragRef.current = null;
-  };
-
-  const dropOnTray = (e) => {
-    e.preventDefault();
-    const d = dragRef.current;
-    if (!d || d.from === "tray") return;
-    setSlots((prev) => prev.map((s, idx) => (idx === d.from ? null : s)));
-    dragRef.current = null;
-  };
-
-  const allow = (e) => e.preventDefault();
-
-  const reset = () => setSlots(Array(8).fill(null));
-
-  const validate = async () => {
-    if (slots.some((x) => x === null)) {
-      setModal({ title: "NOT YET", text: "Place all 8 wires into the connector first.", cls: "" });
-      return;
-    }
-    setChecking(true);
-    try {
-      const { success, message } = await validateCable({ missionId, order: slots });
-      if (success) {
-        redirectRef.current = setTimeout(() => navigate("/feedback"), 2500);
+  function place(index, wireId = selected) {
+    if (pending.current || (wireId && !wireById(wireId))) return
+    setSlots(previous => {
+      const next = [...previous]
+      if (wireId) {
+        const source = next.indexOf(wireId)
+        if (source !== -1) next[source] = next[index]
       }
-      setModal(
-        success
-          ? { title: "YOU WON!", text: message || "Great job! You arranged all 8 wires in the correct order.", cls: "is-win" }
-          : { title: "TRY AGAIN", text: message || "The wire order is not correct yet. Use a hint if you need help.", cls: "" }
-      );
-    } catch (error) {
-      setModal({ title: "ERROR", text: error.message || "Could not validate the cable. Please try again.", cls: "" });
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const openHint = async (n) => {
-    const title = `HINT ${n}`;
-    setModal({ title, text: "Loading...", cls: "" });
+      next[index] = wireId
+      return next
+    })
+    setSelected(null)
+    setStatus(wireId ? `${wireById(wireId).label} placed in slot ${index + 1}.` : `Slot ${index + 1} cleared.`)
+  }
+  async function validate() {
+    if (pending.current) return
+    if (slots.some(wire => !wire)) { setStatus('Place all eight wires into the connector first.'); return }
+    pending.current = true
+    setChecking(true)
     try {
-      const text = await getCableHint(n);
-      setModal({ title, text: text || "No hint available.", cls: "" });
-    } catch {
-      setModal({ title, text: "Could not load the hint.", cls: "" });
-    }
-  };
-
-  const closeModal = () => {
-    const won = modal?.cls === "is-win";
-    clearTimeout(redirectRef.current);
-    setModal(null);
-    if (won) navigate("/feedback");
-  };
-
-  return (
-    <div className="cc-page">
-      <Header />
-
-      <main className="cc-main">
-        <aside className="cc-info">
-          <svg className="cc-trophy" viewBox="0 0 64 56" aria-hidden="true">
-            <defs>
-              <clipPath id="cc-trophy-clip">
-                <path d="M16 4h32v14c0 9-7 15-16 15s-16-6-16-15z" />
-                <rect x="28" y="33" width="8" height="10" />
-                <rect x="20" y="43" width="24" height="7" rx="1.5" />
-              </clipPath>
-            </defs>
-            <g fill="none" stroke="#ffc20e" strokeWidth="3.5" strokeLinecap="round">
-              <path d="M16 8H6c0 8 4 14 11 16" />
-              <path d="M48 8h10c0 8-4 14-11 16" />
-            </g>
-            <g fill="#ffc20e">
-              <path d="M16 4h32v14c0 9-7 15-16 15s-16-6-16-15z" />
-              <rect x="28" y="33" width="8" height="10" />
-              <rect x="20" y="43" width="24" height="7" rx="1.5" />
-            </g>
-            <g clipPath="url(#cc-trophy-clip)">
-              <rect className="cc-shine" x="0" y="0" width="9" height="60" fill="#fff" opacity="0.75" />
-            </g>
-          </svg>
-          <h2 className="cc-info__title">Secret Challenge Unlocked!</h2>
-          <hr className="cc-info__line" />
-          <p className="cc-info__text">Arrange the 8 wires in the correct order!</p>
-        </aside>
-
-        <section className="cc-card">
-          <h3 className="cc-card__title">LAN Cable Challenge</h3>
-
-          <div className="cc-card__body">
-            <div className="cc-conn">
-              <div className="cc-plug">
-                <div className="cc-slots">
-                  {slots.map((wireId, i) => (
-                    <div
-                      key={i}
-                      className="cc-slot"
-                      onDragOver={allow}
-                      onDrop={(e) => dropOnSlot(e, i)}
-                    >
-                      <span className="cc-pin" />
-                      {wireId && (
-                        <Wire
-                          wire={wireById(wireId)}
-                          onDragStart={(e) => startDrag(e, wireId, i)}
-                          onDragEnd={endDrag}
-                        />
-                      )}
-                      <span className="cc-slot__num">{i + 1}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="cc-clip" />
-              <div className="cc-cable" />
-            </div>
-
-            <div className="cc-divider" />
-
-            <div className="cc-tray" onDragOver={allow} onDrop={dropOnTray}>
-              {WIRES.map((w) => {
-                const placed = slots.includes(w.id);
-                return (
-                  <div className="cc-cell" key={w.id}>
-                    {!placed && (
-                      <Wire
-                        wire={w}
-                        onDragStart={(e) => startDrag(e, w.id, "tray")}
-                        onDragEnd={endDrag}
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <button className="cc-reset" onClick={reset} aria-label="Reset wires" title="Reset">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 12a9 9 0 1 0 3-6.7" />
-              <path d="M3 4v5h5" />
-            </svg>
-          </button>
-
-          <button className="cc-validate" onClick={validate} disabled={checking}>
-            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l14 8-14 8V4z" /></svg>
-            Validate
-          </button>
-        </section>
-
-        <aside className="cc-hints">
-          {[1, 2, 3, 4].map((n) => (
-            <button key={n} className="cc-hint-btn" onClick={() => openHint(n)} aria-label={`Hint ${n}`}>
-              {n}
-            </button>
-          ))}
-          <span className="cc-hints__label">HINTS</span>
-        </aside>
-      </main>
-
-      {modal && (
-        <div className="cc-overlay" onClick={closeModal}>
-          <div
-            className={`cc-modal ${modal.cls}`}
-            role="dialog"
-            aria-modal="true"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="cc-modal__title">{modal.title}</h2>
-            <p className="cc-modal__text">{modal.text}</p>
-            <button className="cc-modal__close" onClick={closeModal}>Close</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+      const result = await validateCable({ order: slots })
+      setMessage(result.success
+        ? { title: 'You connected it!', text: 'All eight wires are in the correct order. You’ve completed the cable challenge.', to: '/feedback', action: 'Continue to feedback' }
+        : { title: 'Try another order', text: result.message || 'The wire order is not correct yet. Use a hint and try again.' })
+    } catch (error) { setMessage({ title: 'Unable to check cable', text: error.message }) }
+    finally { pending.current = false; setChecking(false) }
+  }
+  async function hint(id) {
+    const request = ++hintRequest.current
+    setMessage({ title: `Cable hint ${id}`, text: 'Loading hint…' })
+    try {
+      const text = await getCableHint(id)
+      if (request === hintRequest.current) setMessage({ title: `Cable hint ${id}`, text: text || 'No hint is available.' })
+    } catch { if (request === hintRequest.current) setMessage({ title: `Cable hint ${id}`, text: 'Could not load the hint. Close this message and try again.' }) }
+  }
+  return <section className="wrap page" aria-labelledby="cable-title">
+    <Link className="back" to="/network/1/build">← Network builder</Link>
+    <div className="page-heading"><div><p className="eyebrow warm">Secret challenge unlocked</p><h1 id="cable-title">Make the connection.</h1><p className="intro">Arrange the eight wires in the connector, then check the order.</p></div></div>
+    <div className="game-grid"><div className="panel cable-board" aria-busy={checking}>
+      <div className="board-header"><h2>LAN cable challenge</h2><span>{slots.filter(Boolean).length} of 8 wires placed</span></div>
+      <div className="connector" aria-label="Connector slots">{slots.map((id, i) => <button key={i} className="slot" disabled={checking} aria-label={`Slot ${i + 1}: ${wireById(id)?.label || 'empty'}`} onClick={() => place(i)} draggable={Boolean(id) && !checking} onDragStart={event => event.dataTransfer.setData('text/plain', id)} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const wire = event.dataTransfer.getData('text/plain'); if (wire) place(i, wire) }}><span className="slot-pin" /><Swatch wire={wireById(id)} slot /><span>{i + 1}</span></button>)}</div>
+      <div className="wire-area"><h3>Choose a wire</h3><div className="wire-tray">{WIRES.map(wire => <button key={wire.id} disabled={slots.includes(wire.id) || checking} aria-pressed={selected === wire.id} draggable={!slots.includes(wire.id) && !checking} onDragStart={event => event.dataTransfer.setData('text/plain', wire.id)} onClick={() => { setSelected(selected === wire.id ? null : wire.id); setStatus(`Select a slot for ${wire.label}.`) }}><Swatch wire={wire} />{wire.label}</button>)}</div></div>
+      <div className="board-footer"><p className="status" role="status">{status}</p><div className="actions"><button className="button secondary" disabled={checking} onClick={() => { setSlots(Array(8).fill(null)); setSelected(null); setStatus('Connector cleared. Choose a wire to start again.') }}>Reset</button><button className="button primary" disabled={checking} onClick={validate}>{checking ? 'Checking…' : 'Check cable'}</button></div></div>
+    </div><aside className="panel cable-hints"><h2>Need a clue?</h2><p>Work through the hints one at a time.</p><div className="hint-list">{[1, 2, 3, 4].map(id => <button className="button secondary" key={id} disabled={checking} onClick={() => hint(id)}>Hint {id}</button>)}</div></aside></div>
+    <MessageDialog message={message} onClose={() => { hintRequest.current++; setMessage(null) }} />
+  </section>
 }

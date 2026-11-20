@@ -12,7 +12,9 @@ async function request(path, options = {}) {
   })
 
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`)
+    const error = new Error(`API error: ${response.status}`)
+    error.status = response.status
+    throw error
   }
 
   return response.json()
@@ -44,11 +46,36 @@ export async function checkAnswer(answerId, answer) {
   return { correct: result.message === 'correct' }
 }
 
-// POST /feedback  body: { name, age, message, rating }
-// ASSUMPTION: the Rate & Feedback form is in the design but was not in the notes.
-export function sendFeedback({ name, age, message, rating }) {
-  return request('/feedback', {
-    method: 'POST',
-    body: JSON.stringify({ name, age: Number(age) || age, message, rating }),
+// Match the existing feedback controller's five numeric fields.
+export const FEEDBACK_CRITERIA = [
+  ['satisfaction', 'Overall satisfaction'],
+  ['enjoyment', 'Enjoyment'],
+  ['easeOfUse', 'Ease of use'],
+  ['learning', 'Learning'],
+  ['interest', 'Interest'],
+]
+
+export async function sendFeedback(ratings) {
+  const payload = Object.fromEntries(FEEDBACK_CRITERIA.map(([key]) => [key, Number(ratings[key])]))
+  if (Object.values(payload).some(value => !Number.isInteger(value) || value < 1 || value > 5)) {
+    throw new Error('Choose a rating from 1 to 5 for every category.')
+  }
+  const result = await request('/feedback', { method: 'POST', body: JSON.stringify(payload) })
+  if (result.message !== 'Thank for your feedback') throw new Error('Feedback was not saved. Please try again.')
+  return result
+}
+
+export async function getFeedbackChart(options = {}) {
+  const data = await request('/drawChart', options)
+  if (!Number.isInteger(data.totalResponses) || data.totalResponses < 0 || !Array.isArray(data.metrics)) {
+    throw new Error('Invalid feedback summary')
+  }
+  const metrics = FEEDBACK_CRITERIA.map(([key, label]) => {
+    const metric = data.metrics.find(item => item.key === key)
+    if (!metric || (data.totalResponses > 0 && (typeof metric.average !== 'number' || !Number.isFinite(metric.average)))) {
+      throw new Error('Invalid feedback summary')
+    }
+    return { key, label, average: data.totalResponses === 0 ? null : metric.average }
   })
+  return { totalResponses: data.totalResponses, metrics }
 }

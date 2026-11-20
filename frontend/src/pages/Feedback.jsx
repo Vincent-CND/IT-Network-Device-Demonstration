@@ -1,86 +1,48 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import FaceIcon from '../components/FaceIcon.jsx'
-import { sendFeedback } from '../api/client.js'
+import robot from '../network/assets/robot.png'
+import { FEEDBACK_CRITERIA, sendFeedback } from '../api/client.js'
 
-const inputClass =
-  'w-full rounded-lg bg-white px-3 py-2 text-sm text-ink outline-none ring-lime focus:ring-2'
+const RATINGS = [['☹', 'Very poor'], ['☹', 'Poor'], ['⊖', 'Okay'], ['☺', 'Good'], ['☻', 'Excellent']]
 
 export default function Feedback() {
-  const [form, setForm] = useState({ name: '', age: '', message: '', rating: 0 })
-  const [status, setStatus] = useState('idle') // idle | sending | sent | error
+  const [ratings, setRatings] = useState({})
+  const [status, setStatus] = useState('idle')
+  const [error, setError] = useState('')
+  const pending = useRef(false)
+  const complete = FEEDBACK_CRITERIA.every(([key]) => ratings[key])
 
-  const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }))
-
-  async function handleSubmit(e) {
-    e.preventDefault()
+  async function submit(event) {
+    event.preventDefault()
+    if (pending.current || !complete) return
+    pending.current = true
     setStatus('sending')
+    setError('')
     try {
-      await sendFeedback(form)
+      await sendFeedback(ratings)
       setStatus('sent')
-    } catch {
-      setStatus('error')
-    }
+    } catch (failure) {
+      setStatus('idle')
+      setError(failure.status === 404 ? 'Feedback submission is currently unavailable. Your ratings were not sent.' : 'Could not send your feedback. Please try again.')
+    } finally { pending.current = false }
   }
 
-  return (
-    <section className="flex justify-center px-6 py-12">
-      <div className="w-full max-w-xs border border-lime bg-panel p-6 text-white">
-        <h1 className="mb-4 text-center text-base font-semibold">Rate &amp; Feedback</h1>
-
-        {status === 'sent' ? (
-          <div className="py-6 text-center">
-            <p className="text-lg font-semibold text-lime">Thank you!</p>
-            <p className="mt-1 text-sm text-gray-300">Your feedback was sent.</p>
-            <Link
-              to="/"
-              className="mt-5 inline-block rounded-xl bg-brand px-6 py-2 font-semibold text-white hover:brightness-110"
-            >
-              Back to home
-            </Link>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <label className="block text-[11px] font-semibold">
-              Message:
-              <textarea
-                rows={5}
-                value={form.message}
-                onChange={update('message')}
-                className={`${inputClass} mt-1 resize-none`}
-              />
-            </label>
-
-            <div>
-              <p className="mb-1 text-[11px] font-semibold">Rate Us:</p>
-              <div className="flex gap-1.5">
-                {[1, 2, 3, 4, 5].map((level) => (
-                  <FaceIcon
-                    key={level}
-                    level={level}
-                    selected={form.rating === level}
-                    onClick={() => setForm((f) => ({ ...f, rating: level }))}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {status === 'error' && (
-              <p role="alert" className="text-xs text-red-400">
-                Could not send your feedback. Please try again.
-              </p>
-            )}
-
-            <button
-              type="submit"
-              disabled={status === 'sending' || form.rating === 0}
-              className="w-full rounded-xl bg-brand py-2.5 font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
-            >
-              {status === 'sending' ? 'Sending…' : 'Submit'}
-            </button>
-          </form>
-        )}
+  return <section className="wrap page" aria-labelledby="feedback-title">
+    <Link className="back" to="/">← Home</Link>
+    <div className="feedback-grid">
+      <div className="feedback-intro"><p className="eyebrow">Cyber Quest feedback</p><h1 id="feedback-title">How was the quest?</h1><p className="intro">Rate five parts of your experience to help us improve the next adventure.</p><img src={robot} alt="" /></div>
+      <div className="panel feedback-card">
+        {status === 'sent' ? <div id="feedback-done" role="status"><h2>Thanks for taking the quest.</h2><p>Your ratings have been sent.</p><Link className="button primary" to="/">Back to home</Link></div>
+          : <form onSubmit={submit} aria-describedby="feedback-note">
+            {FEEDBACK_CRITERIA.map(([key, label]) => <fieldset key={key} disabled={status === 'sending'}><legend>{label}</legend><div className="ratings">{RATINGS.map(([face, description], i) => <label key={description}>
+              <input name={key} type="radio" value={i + 1} checked={ratings[key] === i + 1} onChange={() => setRatings(previous => ({ ...previous, [key]: i + 1 }))} required />
+              <span className="rating-face" aria-hidden="true">{face}</span><span>{i + 1}<span className="sr-only"> — {description}</span></span>
+            </label>)}</div><div className="rating-scale" aria-hidden="true"><span>Very poor</span><span>Excellent</span></div></fieldset>)}
+            <p className="form-note" id="feedback-note">Choose a rating for each category, then send your feedback.</p>
+            {error && <p className="status" data-error="" role="alert">{error}</p>}
+            <div className="actions"><button className="button primary" type="submit" disabled={!complete || status === 'sending'}>{status === 'sending' ? 'Sending…' : 'Send feedback'}</button></div>
+          </form>}
       </div>
-    </section>
-  )
+    </div>
+  </section>
 }

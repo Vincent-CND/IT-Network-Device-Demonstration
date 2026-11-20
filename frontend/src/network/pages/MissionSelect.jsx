@@ -1,73 +1,19 @@
-import { useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import Header from "../components/Header";
-import robot from "../assets/robot.png";
-import { getMissionInstructions, MISSION_STEP_IDS } from "../api";
-import "./MissionSelect.css";
+import { Link } from 'react-router-dom'
+import robot from '../assets/robot.png'
+import { getMissionInstructions } from '../api.js'
+import useResource from '../../hooks/useResource.js'
+import LoadState from '../../components/LoadState.jsx'
+
+const TITLES = ['Explore the mission', 'Choose your devices', 'Connect your network', 'Take on the challenge']
 
 export default function MissionSelect() {
-  const navigate = useNavigate();
-  const { id: missionId } = useParams();
-  const [steps, setSteps] = useState([]);
-  const [opened, setOpened] = useState([1]);
-
-  useEffect(() => {
-    let active = true;
-    setOpened([1]);
-    setSteps([]);
-    getMissionInstructions()
-      .then((list) => active && setSteps(list))
-      .catch(() => active && setSteps(MISSION_STEP_IDS.map(() => "Could not load the instructions. Please refresh to try again.")));
-    return () => { active = false; };
-  }, [missionId]);
-
-  const toggle = (n) =>
-    setOpened((prev) => (prev.includes(n) ? prev.filter((x) => x !== n) : [...prev, n]));
-
-  return (
-    <div className="ms-page">
-      <Header />
-
-      <main className="ms-main">
-        <nav className="ms-levels" aria-label="Mission steps">
-          {MISSION_STEP_IDS.map((n) => {
-            const isOpen = opened.includes(n);
-            return (
-              <div className="ms-row" key={n}>
-                <button
-                  className={`ms-level ${isOpen ? "is-active" : ""}`}
-                  onClick={() => toggle(n)}
-                  aria-expanded={isOpen}
-                  aria-controls={`mission-step-${n}`}
-                >
-                  {n}
-                </button>
-                <div id={`mission-step-${n}`} className={`ms-step ${isOpen ? "is-open" : ""}`} aria-hidden={!isOpen}>
-                  {steps[n - 1] ?? "Loading instruction…"}
-                </div>
-              </div>
-            );
-          })}
-        </nav>
-
-        <aside className="ms-side">
-          <div className="ms-bubble">
-            Don't worry too much, we got your back with hint.
-          </div>
-
-          <div className="ms-robot">
-            <img src={robot} alt="Helper robot" />
-            <div className="ms-robot__shadow" />
-          </div>
-
-          <button className="ms-start" onClick={() => navigate(`/network/${missionId}/build`)}>
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M6 4l14 8-14 8V4z" />
-            </svg>
-            Start Mission
-          </button>
-        </aside>
-      </main>
+  const resource = useResource(getMissionInstructions)
+  return <section className="wrap page" aria-labelledby="network-title">
+    <Link className="back" to="/#missions">← All missions</Link>
+    <div className="page-heading"><div><p className="eyebrow warm">Network Builder · Mission briefing</p><h1 id="network-title">Connect your world.</h1><p className="intro">Build a network and check how the devices connect. Then take on the cable challenge.</p></div><Link className="button primary" to="/network/1/build">Start mission</Link></div>
+    <div className="game-grid network-brief">
+      <div className="steps" aria-label="Mission steps"><LoadState {...resource} />{resource.data?.map((text, i) => <details key={i} open={i === 0}><summary><span>0{i + 1}</span>{TITLES[i]}</summary><p>{text}</p></details>)}</div>
+      <aside className="panel guide"><img src={robot} alt="" /><div><h2>Need a hand?</h2><p>Look for the hint button while you’re building.</p></div></aside>
     </div>
-  );
+  </section>
 }

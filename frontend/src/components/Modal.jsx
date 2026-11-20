@@ -1,31 +1,19 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 
-// Generic centered white dialog with a dimmed backdrop.
-// Closes on Escape and on backdrop click.
 export default function Modal({ open, onClose, children, label }) {
+  const ref = useRef(null)
   useEffect(() => {
-    if (!open) return
-    const onKey = (e) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
-
-  if (!open) return null
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        className="relative w-full max-w-md overflow-hidden rounded-3xl bg-white p-8 shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        {children}
-      </div>
-    </div>
-  )
+    const dialog = ref.current
+    if (open && !dialog.open) dialog.showModal()
+    else if (!open && dialog.open) dialog.close()
+  }, [open])
+  return <dialog ref={ref} aria-label={label} onCancel={event => { event.preventDefault(); onClose() }}
+    onClick={event => {
+      if (event.target !== event.currentTarget) return
+      const rect = event.currentTarget.getBoundingClientRect()
+      if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose()
+    }}>
+    <button className="dialog-close" type="button" onClick={onClose} aria-label="Close dialog">×</button>
+    {children}
+  </dialog>
 }

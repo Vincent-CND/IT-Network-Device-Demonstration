@@ -55,3 +55,35 @@ test('backend failures are surfaced to the caller', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => Response.json({ message: 'Error from server' }, { status: 500 }))
   await assert.rejects(getQuestion(1), /API error: 500/)
 })
+
+test('feedback sends the five numeric fields expected by the existing controller', async (t) => {
+  const { sendFeedback } = await import('./client.js')
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, '/api/feedback')
+    assert.equal(options.method, 'POST')
+    assert.deepEqual(JSON.parse(options.body), { satisfaction: 5, enjoyment: 4, easeOfUse: 3, learning: 4, interest: 5 })
+    return Response.json({ message: 'Thank for your feedback' })
+  })
+  await sendFeedback({ satisfaction: '5', enjoyment: 4, easeOfUse: 3, learning: 4, interest: 5, message: 'not supported' })
+})
+
+test('incomplete ratings never reach the backend, and a failed save is not reported as success', async (t) => {
+  const { sendFeedback } = await import('./client.js')
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json({ message: 'Sorry We cannot insert these values' }))
+  await assert.rejects(sendFeedback({ satisfaction: 5 }), /every category/)
+  assert.equal(fetch.mock.callCount(), 0)
+  await assert.rejects(sendFeedback({ satisfaction: 5, enjoyment: 5, easeOfUse: 5, learning: 5, interest: 5 }), /not saved/)
+})
+
+test('feedback summary handles an empty database and preserves route-unavailable status', async (t) => {
+  const { getFeedbackChart, FEEDBACK_CRITERIA } = await import('./client.js')
+  const fetch = t.mock.method(globalThis, 'fetch', async url => {
+    assert.equal(url, '/api/drawChart')
+    return Response.json({ totalResponses: 0, metrics: FEEDBACK_CRITERIA.map(([key, label]) => ({ key, label, average: null })) })
+  })
+  const data = await getFeedbackChart()
+  assert.equal(data.totalResponses, 0)
+  assert.ok(data.metrics.every(metric => metric.average === null))
+  fetch.mock.mockImplementation(async () => new Response('Cannot GET /drawChart', { status: 404 }))
+  await assert.rejects(getFeedbackChart(), error => error.status === 404)
+})

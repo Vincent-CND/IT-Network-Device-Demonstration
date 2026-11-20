@@ -74,3 +74,11 @@ test('validation displays backend errors instead of reporting a lost connection'
   t.mock.method(globalThis, 'fetch', async () => Response.json({ message: 'Challenge not found' }, { status: 404 }))
   await assert.rejects(validateCable({ order: ['br'] }), /Challenge not found/)
 })
+
+test('hints use the backend message envelope and missing database hints become unavailable', async (t) => {
+  const { getBuilderHint, getCableHint } = await import('./api.js')
+  t.mock.method(globalThis, 'fetch', async url => Response.json({ message: url.endsWith('/4') ? 'There are no more hint' : `Hint from ${url}` }))
+  assert.equal(await getBuilderHint(1), 'Hint from /api/hint/builder/1')
+  assert.equal(await getCableHint(2), 'Hint from /api/hint/cable/2')
+  assert.equal(await getCableHint(4), '')
+})
